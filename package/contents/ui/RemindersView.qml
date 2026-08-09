@@ -51,7 +51,14 @@ ColumnLayout {
         visible: view.empty
         icon: "appointment-reminder"
         title: i18n("No reminders")
-        hint: i18n("Add one above, e.g. \"call the bank ^tomorrow\" or \"stretch ^3h\".")
+        hint: i18n("Pick a time chip and add your first reminder.")
+    }
+
+    QN.DateTimePopup {
+        id: duePicker
+        property string forId: ""
+        onPicked: (when, repeat) => view.controller.updateItem("reminders", forId,
+            { dueAt: when.toISOString(), repeat: repeat, notified: false, ackedAt: null })
     }
 
     QQC2.ScrollView {
@@ -135,25 +142,9 @@ ColumnLayout {
                                     QQC2.ToolButton {
                                         icon.name: "appointment-new"; flat: true
                                         icon.width: Kirigami.Units.iconSizes.small; icon.height: Kirigami.Units.iconSizes.small
-                                        onClicked: dueM.open()
-                                        QQC2.Menu {
-                                            id: dueM
-                                            QQC2.MenuItem { text: i18n("In 1 hour"); onTriggered: view.controller.updateItem("reminders", rrow.modelData.id, { dueAt: new Date(Date.now() + 3600000).toISOString(), notified: false, ackedAt: null }) }
-                                            QQC2.MenuItem { text: i18n("Tomorrow 9:00"); onTriggered: { var d = new Date(); d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0); view.controller.updateItem("reminders", rrow.modelData.id, { dueAt: d.toISOString(), notified: false, ackedAt: null }); } }
-                                            QQC2.MenuItem { text: i18n("Next week"); onTriggered: { var d = new Date(); d.setDate(d.getDate() + 7); d.setHours(9, 0, 0, 0); view.controller.updateItem("reminders", rrow.modelData.id, { dueAt: d.toISOString(), notified: false, ackedAt: null }); } }
-                                        }
-                                    }
-                                    QQC2.ToolButton {
-                                        icon.name: "view-refresh"; flat: true
-                                        icon.width: Kirigami.Units.iconSizes.small; icon.height: Kirigami.Units.iconSizes.small
-                                        onClicked: repM.open()
-                                        QQC2.Menu {
-                                            id: repM
-                                            QQC2.MenuItem { text: i18n("Does not repeat"); onTriggered: view.controller.updateItem("reminders", rrow.modelData.id, { repeat: "none" }) }
-                                            QQC2.MenuItem { text: i18n("Daily"); onTriggered: view.controller.updateItem("reminders", rrow.modelData.id, { repeat: "daily" }) }
-                                            QQC2.MenuItem { text: i18n("Weekly"); onTriggered: view.controller.updateItem("reminders", rrow.modelData.id, { repeat: "weekly" }) }
-                                            QQC2.MenuItem { text: i18n("Monthly"); onTriggered: view.controller.updateItem("reminders", rrow.modelData.id, { repeat: "monthly" }) }
-                                        }
+                                        onClicked: { duePicker.forId = rrow.modelData.id;
+                                                     duePicker.openFor(new Date(view.effDue(rrow.modelData)), rrow.modelData.repeat || "none"); }
+                                        QQC2.ToolTip.text: i18n("Change time"); QQC2.ToolTip.visible: hovered
                                     }
                                     QQC2.ToolButton {
                                         icon.name: "media-playback-pause"; flat: true

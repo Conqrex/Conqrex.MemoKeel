@@ -58,6 +58,11 @@ Rectangle {
     Component.onDestruction: flush()
     Timer { id: commitTimer; interval: 700; onTriggered: ed.commit() }
 
+    QN.DateTimePopup {
+        id: cardDue
+        onPicked: (when, repeat) => ed.controller.setDue("cards", ed.cardId, when.toISOString())
+    }
+
     // swallow clicks so they don't reach the dimmer behind the sheet
     MouseArea { anchors.fill: parent; onClicked: (m) => m.accepted = true }
 
@@ -133,6 +138,10 @@ Rectangle {
             Layout.fillWidth: true
             spacing: Kirigami.Units.smallSpacing
             QN.DueBadge { iso: (ed.cardData && ed.cardData.dueAt) ? ed.cardData.dueAt : ""; nowMs: ed.nowMs; use24h: ed.use24h }
+            QQC2.Button {
+                icon.name: "appointment-new"; text: i18n("Due…")
+                onClicked: cardDue.openFor(ed.cardData && ed.cardData.dueAt ? new Date(ed.cardData.dueAt) : new Date(Date.now() + 86400000), "none")
+            }
             Item { Layout.fillWidth: true }
             QN.ColorPicker {
                 selected: ed.cardData ? (ed.cardData.color || "") : ""

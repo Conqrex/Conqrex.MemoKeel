@@ -80,8 +80,6 @@ Item {
         switch (full.currentMode) {
         case "todo":
             id = controller.addTodo({ text: p.text, priority: p.priority, dueAt: p.dueAt }); coll = "todos"; break;
-        case "reminders":
-            id = controller.addReminder({ text: p.text, dueAt: p.dueAt || new Date(Date.now() + 3600000).toISOString() }); coll = "reminders"; break;
         case "kanban":
             var colId = full.firstColumnId();
             if (!colId) colId = controller.addColumn({ title: i18n("To Do") });
@@ -185,15 +183,20 @@ Item {
         QuickAddBar {
             id: quickAdd
             Layout.fillWidth: true
+            visible: full.currentMode !== "reminders"
             placeholder: {
                 switch (full.currentMode) {
                 case "todo": return i18n("Add a task…  #tag !priority ^due");
-                case "reminders": return i18n("Remind me to…  ^3h ^tomorrow ^14:30");
                 case "kanban": return i18n("Add a card…  #tag !priority");
                 default: return i18n("Add a note…  #tag");
                 }
             }
             onAddRequested: (p) => full.handleAdd(p)
+        }
+        ReminderAddRow {
+            Layout.fillWidth: true
+            visible: full.currentMode === "reminders"
+            controller: full.controller
         }
 
         // nav rail + content ----------------------------------------------
