@@ -1,38 +1,28 @@
 import QtQuick
 import org.kde.kirigami as Kirigami
+import "../theme" as T
 
-// A reusable glassy card surface: translucent elevated background, rounded
-// corners, a thin accent border that brightens on hover, and a left accent
-// stripe. Children are placed directly inside; inset them past the stripe.
+// A reusable glassy card surface on the QN token palette: dark elevated
+// gradient, rounded corners, accent border that brightens on hover, and a
+// left accent stripe. Children are placed directly inside; inset past stripe.
 Rectangle {
     id: card
 
     property color accent: Kirigami.Theme.highlightColor
     property bool hovered: false
     property bool showStripe: true
-    property real cardRadius: Kirigami.Units.smallSpacing * 1.6
+    property real cardRadius: T.QN.radiusM
 
     radius: cardRadius
     antialiasing: true
 
-    readonly property color _bg: Kirigami.Theme.backgroundColor
     gradient: Gradient {
-        GradientStop {
-            position: 0.0
-            color: Qt.rgba(card._bg.r + (1 - card._bg.r) * 0.06,
-                           card._bg.g + (1 - card._bg.g) * 0.06,
-                           card._bg.b + (1 - card._bg.b) * 0.06,
-                           card.hovered ? 0.92 : 0.78)
-        }
-        GradientStop {
-            position: 1.0
-            color: Qt.rgba(card._bg.r, card._bg.g, card._bg.b, card.hovered ? 0.86 : 0.7)
-        }
+        GradientStop { position: 0.0; color: card.hovered ? T.QN.surfaceHi : T.QN.surface }
+        GradientStop { position: 1.0; color: Qt.darker(T.QN.surface, card.hovered ? 1.02 : 1.12) }
     }
 
     border.width: 1
-    border.color: Qt.rgba(accent.r, accent.g, accent.b, hovered ? 0.65 : 0.28)
-
+    border.color: T.QN.alpha(card.accent, card.hovered ? 0.65 : 0.25)
     Behavior on border.color { ColorAnimation { duration: Kirigami.Units.shortDuration } }
 
     // left accent stripe

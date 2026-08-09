@@ -19,6 +19,9 @@
             <label>Neon accent preset: cyan, sky, violet, lime, amber, rose or slate</label>
             <default>cyan</default>
         </entry>
+        <entry name="followSystemTheme" type="Bool">
+            <default>false</default>
+        </entry>
         <entry name="sortBy" type="String">
             <label>List sort key: updated, created, title, priority or due</label>
             <default>updated</default>

@@ -7,6 +7,7 @@ import org.kde.plasma.core as PlasmaCore
 import org.kde.plasma.components as PlasmaComponents
 import org.kde.kirigami as Kirigami
 import "components" as QN
+import "theme" as T
 import "../code/theme.js" as Theme
 
 // The popup shell: header, global search + quick-add, a left nav rail and a
@@ -88,6 +89,23 @@ Item {
             id = controller.addNote({ title: p.text, color: Plasmoid.configuration.defaultNoteColor }); coll = "notes"; break;
         }
         if (id && p.tagNames.length) controller.applyTagNames(coll, id, p.tagNames);
+    }
+
+    // feed the theme singleton: system palette + mode
+    Binding { target: T.QN; property: "followSystem"; value: Plasmoid.configuration.followSystemTheme }
+    Binding { target: T.QN; property: "sysWindow";    value: Kirigami.Theme.backgroundColor }
+    Binding { target: T.QN; property: "sysView";      value: Kirigami.Theme.backgroundColor }
+    Binding { target: T.QN; property: "sysText";      value: Kirigami.Theme.textColor }
+    Binding { target: T.QN; property: "sysHighlight"; value: Kirigami.Theme.highlightColor }
+
+    // opaque themed backdrop for the whole popup
+    Rectangle {
+        anchors.fill: parent
+        z: -1
+        radius: T.QN.radiusM
+        color: T.QN.bg
+        border.width: 1
+        border.color: T.QN.border
     }
 
     // ----------------------------------------------------------------- layout
