@@ -76,7 +76,7 @@ Item {
         readonly property int n: kroot.columns.length
         readonly property real gap: Kirigami.Units.smallSpacing
         readonly property real addW: Kirigami.Units.gridUnit * 2
-        readonly property real minCol: Kirigami.Units.gridUnit * 8
+        readonly property real minCol: Kirigami.Units.gridUnit * 7
         // fit-to-width: columns share space; never below minCol.
         // The Row holds n columns plus the add-column strip → n internal gaps.
         readonly property real colW: Math.max(minCol, (width - addW - gap * n) / Math.max(1, n))
@@ -99,7 +99,7 @@ Item {
                     // While a search query is active colCards() returns relevance order,
                     // not board order, so a positional drop would land somewhere other
                     // than the indicator showed. Fall back to plain move-to-column.
-                    readonly property bool positional: !(kroot.query && kroot.query.trim() !== "")
+                    readonly property bool positional: !((kroot.query && kroot.query.trim() !== "") || kroot.tagFilter)
                     // reactive position of the card list inside this column (no mapToItem,
                     // which has no tracked dependency and would evaluate only once)
                     readonly property real listLeft: colBody.x + cardList.x
@@ -121,6 +121,9 @@ Item {
                     function dragIdOf(d) { return (d && d.source && d.source.cardId) ? d.source.cardId : ""; }
                     function track(d) {
                         dropIdx.dragId = col.dragIdOf(d);
+                        // a foreign drag (no cardId) will never be accepted by onDropped, so
+                        // don't show an insertion indicator that promises a drop that can't happen
+                        if (!dropIdx.dragId) { dropIdx.idx = -1; return; }
                         dropIdx.idx = col.positional ? cardList.insertIndexAt(d.y, dropIdx.dragId) : -1;
                     }
 

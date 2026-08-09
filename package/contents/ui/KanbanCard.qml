@@ -46,8 +46,11 @@ QN.NeonCard {
         // than the drag threshold below, so a short drag used to do both.)
         dragThreshold: drag.dragThreshold
         onTapped: (ep) => {
-            // the ⋮ button is a child of the card; a tap on it must not also open the editor
-            if (menuBtn.enabled && menuBtn.contains(menuBtn.mapFromItem(card, ep.position)))
+            // the ⋮ button is a child of the card; a tap that lands inside its bounds
+            // must not also open the editor. Gate purely on tap position — not on the
+            // button's enabled state, which stays true regardless of hover/visibility
+            // so touch and keyboard focus traversal can always reach it.
+            if (menuBtn.contains(menuBtn.mapFromItem(card, ep.position)))
                 return;
             card.editRequested(card.cardId);
         }
@@ -89,8 +92,9 @@ QN.NeonCard {
                 icon.name: "application-menu"; flat: true
                 icon.width: Kirigami.Units.iconSizes.small; icon.height: Kirigami.Units.iconSizes.small
                 opacity: ch.hovered || cardMenu.visible ? 1 : 0
-                // fully transparent → don't swallow clicks either
-                enabled: ch.hovered || cardMenu.visible
+                // kept enabled (not just opacity-hidden) so touch and keyboard focus
+                // traversal can still reach it — this is the documented fallback for
+                // moving cards, so it must stay genuinely reachable, not just visible
                 onClicked: cardMenu.open()
                 QQC2.Menu {
                     id: cardMenu

@@ -45,8 +45,8 @@ Item {
     property bool everOpened: false
     onPopupOpenChanged: if (popupOpen) everOpened = true
 
-    Layout.preferredWidth: Kirigami.Units.gridUnit * (controller ? Plasmoid.configuration.popupWidthUnits : 26)
-    Layout.preferredHeight: Kirigami.Units.gridUnit * (controller ? Plasmoid.configuration.popupHeightUnits : 26)
+    Layout.preferredWidth: Kirigami.Units.gridUnit * (controller ? Plasmoid.configuration.popupWidthUnits : 32)
+    Layout.preferredHeight: Kirigami.Units.gridUnit * (controller ? Plasmoid.configuration.popupHeightUnits : 30)
     Layout.minimumWidth: Kirigami.Units.gridUnit * 19
     Layout.minimumHeight: Kirigami.Units.gridUnit * 16
 
