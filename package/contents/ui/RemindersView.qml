@@ -62,11 +62,16 @@ ColumnLayout {
         onPicked: (when, repeat) => {
             // Only a real time change resets the delivery state. Using the
             // picker purely to set a repeat must not un-ack the reminder or
-            // drag it back into an active bucket.
-            var patch = { repeat: repeat };
-            if (isNaN(duePicker.forDueMs) || when.getTime() !== duePicker.forDueMs) {
+            // drag it back into an active bucket. Compare at minute
+            // granularity: the picker always zeroes seconds/ms, but the
+            // stored dueAt (e.g. from the default "In 1h" chip or a ^Nh
+            // token) usually does not, so a full-precision compare would
+            // spuriously report a change on a repeat-only edit.
+            var patch = { repeat: repeat, snoozeUntil: null };   // the user explicitly chose a time here, so any stale snooze never survives
+            var whenMin = Math.floor(when.getTime() / 60000);
+            var forDueMin = isNaN(duePicker.forDueMs) ? NaN : Math.floor(duePicker.forDueMs / 60000);
+            if (isNaN(forDueMin) || whenMin !== forDueMin) {
                 patch.dueAt = when.toISOString();
-                patch.snoozeUntil = null;   // a new time supersedes any snooze
                 patch.notified = false;
                 patch.ackedAt = null;
             }

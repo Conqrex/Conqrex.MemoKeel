@@ -35,13 +35,18 @@ ColumnLayout {
     function submit() {
         var raw = field.text.trim();
         if (raw === "") return;
-        var p = Tokens.parse(raw);
+        var p = Tokens.parse(raw, { keepPriority: true });
         if (p.text === "") return;
         // A typed ^token wins over the chip; otherwise the chip selection applies.
+        // When the token supplies the due time, it fully determines the
+        // schedule, so any repeat picked via the Custom chip is dropped —
+        // a half-honoured mix of "token due, chip repeat" would be
+        // incoherent with what the Custom chip is still displaying.
         var due = p.dueAt ? new Date(p.dueAt) : chipDue(row.chipIndex);
         if (isNaN(due.getTime())) { picker.openFor(new Date(Date.now() + 3600000), row.customRepeat); return; }
+        var repeat = p.dueAt ? "none" : (row.chipIndex === 4 ? row.customRepeat : "none");
         var id = row.controller.addReminder({ text: p.text, dueAt: due.toISOString(),
-                                              repeat: row.chipIndex === 4 ? row.customRepeat : "none" });
+                                              repeat: repeat });
         if (id && p.tagNames.length) row.controller.applyTagNames("reminders", id, p.tagNames);
         field.text = "";
         row.chipIndex = 0;

@@ -76,7 +76,11 @@ QQC2.Popup {
                 Layout.fillWidth: true
                 locale: grid.locale
                 // Themed: the default Basic delegate uses the palette text
-                // colour, which is unreadable on T.QN.surface.
+                // colour, which is unreadable on T.QN.surface. The Basic
+                // style's contentItem is a plain Row that does not stretch
+                // delegates, so the delegate must claim the same width as
+                // the MonthGrid cells itself or the header letters drift
+                // out of alignment with their columns.
                 delegate: QQC2.Label {
                     required property var model
                     text: model.shortName
@@ -84,6 +88,7 @@ QQC2.Popup {
                     font: Kirigami.Theme.smallFont
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
+                    width: Kirigami.Units.gridUnit * 1.6
                 }
             }
 

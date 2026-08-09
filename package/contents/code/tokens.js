@@ -38,7 +38,11 @@ function parsePriority(tok) {
 
 // Strip recognised tokens out of raw and return the leftovers plus what
 // was found: { text, tagNames, priority, dueAt }.
-function parse(raw) {
+// opts.keepPriority: when true, "!" tokens are left in the returned text
+// instead of being stripped, for callers (e.g. reminders) that have no
+// priority field to apply the parsed value to.
+function parse(raw, opts) {
+    var keepPriority = !!(opts && opts.keepPriority);
     var tagNames = [], priority = 0, dueAt = null;
     var words = ("" + (raw || "")).split(/\s+/);
     var rest = [];
@@ -47,7 +51,11 @@ function parse(raw) {
         if (w.length < 2) { if (w) rest.push(w); continue; }
         var head = w.charAt(0), body = w.substring(1);
         if (head === "#") { tagNames.push(body.toLowerCase()); }
-        else if (head === "!") { var p = parsePriority(body); if (p >= 0) priority = p; else rest.push(w); }
+        else if (head === "!") {
+            var p = parsePriority(body);
+            if (p >= 0 && !keepPriority) priority = p;
+            else rest.push(w);
+        }
         else if (head === "^") { var d = parseDue(body); if (d) dueAt = d; else rest.push(w); }
         else rest.push(w);
     }
