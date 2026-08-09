@@ -116,6 +116,7 @@ Item {
                     id: item
                     required property var modelData
                     required property int index
+                    objectName: "tab_" + modelData.id
                     readonly property bool active: tabs.currentMode === modelData.id
 
                     width: tabs.hPad * 2 + tabs.iconSize

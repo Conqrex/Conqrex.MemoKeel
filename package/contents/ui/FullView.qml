@@ -36,9 +36,24 @@ Item {
     // stays a pure binding so the toggle button can bind to it safely.
     property bool searchRequested: false
     readonly property bool searchPinned: full.currentMode === "search"
-    readonly property bool searchVisible: full.searchRequested || full.searchPinned
+    // Only the modes that actually take `query`/`tagFilter` may show the
+    // filtering chrome. Dashboard, Tags and Board render their own unfiltered
+    // content, so offering a field or a chip there would assert a filter the
+    // content does not obey. The filters themselves survive the visit: leaving
+    // Notes for Tags and coming back restores exactly what was set.
+    readonly property var filterableModes: ["notes", "todo", "kanban", "reminders", "search"]
+    readonly property bool filterable: full.filterableModes.indexOf(full.currentMode) >= 0
+    readonly property bool searchVisible: full.filterable && (full.searchRequested || full.searchPinned)
     property string searchText: ""
     property string tagFilter: ""
+    // A query that is live (being fed to the current view) but has no field on
+    // screen to show it. That state is what the header chip exists for: an
+    // invisible filter silently hiding items is the bug it prevents.
+    readonly property bool queryActive: full.filterable && full.searchText !== ""
+    readonly property bool queryChipVisible: full.queryActive && !full.searchVisible
+    // Same rule for the tag chip: only claim a filter on a tab that honours it.
+    readonly property bool tagChipVisible: full.filterable && full.tagFilter !== ""
+                                           && !!full.doc && !!full.doc.tags[full.tagFilter]
     property string editingNoteId: ""
     property string editingCardId: ""
     property bool showTrash: false
@@ -167,9 +182,14 @@ Item {
 
     function showSearch() { full.searchRequested = true; searchBar.focusField(); }
     // Collapsing is not "cancel": the query survives, so re-opening the bar
-    // (or landing on the Search tab) shows what the user last typed. Only
-    // Escape clears the text, and only as its own separate step.
+    // (or landing on the Search tab) shows what the user last typed. A surviving
+    // query is never silent, though — the header chip takes over as its visible,
+    // removable representation for as long as the bar is down.
     function hideSearch() { full.searchRequested = false; }
+    // The one place the query is dropped. Clearing the field (not just
+    // `searchText`) keeps the two in step, so re-opening the bar shows an
+    // empty field rather than text the views are no longer filtering by.
+    function clearSearch() { searchBar.clear(); }
     function toggleSearch() {
         // On the Search tab the bar cannot be collapsed, so the toggle just
         // puts the caret back in it — without arming `searchRequested`, which
@@ -179,13 +199,16 @@ Item {
     }
 
     // Escape unwinds one layer at a time: overlays first, then the search text,
-    // then the search bar itself.
+    // then the search bar itself. It only ever claims a layer the user can
+    // actually see — a query on a tab that ignores it (`queryActive` is false
+    // there) is not a layer, so Escape falls through to closing the popup
+    // instead of quietly clearing something off screen.
     function handleEscape() {
         if (full.showTrash) { full.showTrash = false; return; }
         if (full.editingCardId !== "") { full.editingCardId = ""; return; }
         if (full.editingNoteId !== "") { full.editingNoteId = ""; return; }
-        if (full.searchText !== "") { searchBar.clear(); return; }
-        if (full.searchRequested && !full.searchPinned) full.searchRequested = false;
+        if (full.queryActive) { full.clearSearch(); return; }
+        if (full.searchVisible && !full.searchPinned) full.searchRequested = false;
     }
 
     // Qt.WindowShortcut keeps these scoped to the window this view lives in.
@@ -204,7 +227,8 @@ Item {
         onActivated: full.focusAdd("kanban")
     }
     Shortcut { sequence: "Ctrl+R"; context: Qt.WindowShortcut; enabled: full.shortcutsActive; onActivated: full.focusAdd("reminders") }
-    Shortcut { sequence: "Ctrl+F"; context: Qt.WindowShortcut; enabled: full.shortcutsActive; onActivated: full.toggleSearch() }
+    // Ctrl+F is only a real action on a tab whose view takes the query.
+    Shortcut { sequence: "Ctrl+F"; context: Qt.WindowShortcut; enabled: full.shortcutsActive && full.filterable; onActivated: full.toggleSearch() }
     // Only claim Escape when there is a layer to unwind; otherwise it must keep
     // falling through to Plasma, which closes the popup with it.
     Shortcut {
@@ -212,8 +236,8 @@ Item {
         context: Qt.WindowShortcut
         enabled: full.shortcutsActive
                  && (full.showTrash || full.editingCardId !== "" || full.editingNoteId !== ""
-                     || full.searchText !== ""
-                     || (full.searchRequested && !full.searchPinned))
+                     || full.queryActive
+                     || (full.searchVisible && !full.searchPinned))
         onActivated: full.handleEscape()
     }
     Shortcut { sequence: "Ctrl+1"; context: Qt.WindowShortcut; enabled: full.shortcutsActive && tabBar.modeAt(0) !== ""; onActivated: full.selectTabIndex(0) }
@@ -278,10 +302,25 @@ Item {
             }
             Kirigami.Heading { level: 3; text: i18n("MemoKeel"); color: T.QN.text }
 
+            // A live query with no field on screen: the chip is the query's
+            // only visible representation, and removing it is the only way
+            // back to unfiltered content without re-opening the bar. Clicking
+            // it opens the bar instead, so the text can be edited rather than
+            // retyped. Same shape and placement as the tag chip below, because
+            // it is the same idea: "a filter is on, here it is, drop it here."
+            QueryChip {
+                objectName: "queryChip"
+                visible: full.queryChipVisible
+                query: full.searchText
+                onClicked: full.showSearch()
+                onRemoveClicked: full.clearSearch()
+            }
+
             // The active tag filter belongs beside the title, not out with the
             // badges — so the spacer comes after it.
             QN.TagChip {
-                visible: full.tagFilter !== "" && full.doc && full.doc.tags[full.tagFilter]
+                objectName: "tagChip"
+                visible: full.tagChipVisible
                 tagName: full.tagName(full.tagFilter)
                 tagColor: (full.doc && full.doc.tags[full.tagFilter])
                           ? Theme.accentFor(full.doc.tags[full.tagFilter].color, full.accent) : full.accent
@@ -324,15 +363,30 @@ Item {
                 }
             }
             QQC2.ToolButton {
+                id: searchToggle
+                objectName: "searchToggle"
                 icon.name: "search"
                 flat: true
-                // Deliberately NOT checkable: a checkable button owns `checked`
-                // and would fight the binding below. Here `checked` is a pure
-                // one-way read of the state, and the click only ever changes
-                // the state, so the two can never disagree.
-                checkable: false
+                visible: full.filterable
+                // Checkable, like every other toggle in this widget (see
+                // NotesView/TodoView): qqc2-desktop-style only paints a
+                // ToolButton's "on" state when `checkable && checked`, so a
+                // non-checkable button's `checked` is never drawn at all. The
+                // declarative binding below survives actuation, because
+                // QQuickAbstractButton::toggle() writes `checked` from C++ and
+                // a C++ write does not tear down a QML binding.
+                checkable: true
                 checked: full.searchVisible
-                onClicked: full.toggleSearch()
+                onToggled: {
+                    full.toggleSearch();
+                    // The one case where the state cannot move: on the Search
+                    // tab the bar is pinned, so toggleSearch() only refocuses
+                    // and `searchVisible` never changes — nothing would make
+                    // the binding re-evaluate and un-toggle the button. Restate
+                    // it explicitly so the button can never sit "off" over an
+                    // open bar.
+                    searchToggle.checked = Qt.binding(function () { return full.searchVisible; });
+                }
                 QQC2.ToolTip.text: i18n("Search (Ctrl+F)")
                 QQC2.ToolTip.visible: hovered
             }
@@ -353,7 +407,9 @@ Item {
                         // one, and the handler writes the config, never `checked`.
                         // The config is the single source both mirrors read.
                         checkable: true
-                        enabled: full.hasDoc
+                        // Inert on the dashboard, which never shows archived
+                        // items — same reasoning as the footer toggle.
+                        enabled: full.hasDoc && full.currentMode !== "dashboard"
                         onTriggered: Plasmoid.configuration.showArchived = !Plasmoid.configuration.showArchived
                         Binding {
                             target: archivedItem
@@ -409,11 +465,16 @@ Item {
             visible: full.currentMode !== "reminders" && full.currentMode !== "dashboard"
             // Without a document every add intent would patch `null`.
             enabled: full.hasDoc
+            // The hint names the shortcut that focuses *this* field. On Search,
+            // Tags and Board the field adds a note but Ctrl+N would navigate
+            // away to the Notes tab's own field, so those tabs get no hint
+            // rather than a wrong one.
             hint: {
                 switch (full.currentMode) {
+                case "notes": return i18n("Ctrl+N");
                 case "todo": return i18n("Ctrl+T");
                 case "kanban": return i18n("Ctrl+K");
-                default: return i18n("Ctrl+N");
+                default: return "";
                 }
             }
             placeholder: {
@@ -477,15 +538,21 @@ Item {
                 }
             }
             QQC2.ToolButton {
+                objectName: "archiveToggle"
                 icon.name: "archive-insert"
                 flat: true
-                // Same reasoning as the search toggle: `checked` is a pure read
-                // of the config, the click only writes the config, so this
-                // button and the ⋮ menu entry can never drift apart.
-                checkable: false
-                enabled: full.hasDoc
+                // Checkable with a live binding on the config — the pattern
+                // NotesView and TodoView already use for this very setting, and
+                // the only one qqc2-desktop-style actually paints as "on".
+                // The handler writes the config, never `checked`, so this
+                // button and the ⋮ menu entry always read the same value.
+                checkable: true
+                // The dashboard excludes archived items unconditionally (it is
+                // the at-a-glance view of live work), so on that tab this
+                // control would do nothing visible. Disabled beats inert.
+                enabled: full.hasDoc && full.currentMode !== "dashboard"
                 checked: Plasmoid.configuration.showArchived
-                onClicked: Plasmoid.configuration.showArchived = !Plasmoid.configuration.showArchived
+                onToggled: Plasmoid.configuration.showArchived = checked
                 QQC2.ToolTip.text: i18n("Show archived items")
                 QQC2.ToolTip.visible: hovered
             }
@@ -538,6 +605,69 @@ Item {
             color: parent.fg
             font.pixelSize: parent.height * 0.6
             font.bold: true
+        }
+    }
+
+    // A removable pill announcing the live search query, drawn in the header
+    // exactly where the tag-filter chip sits. Same geometry, same removal
+    // gesture; it carries the search icon and the quoted text instead of a tag
+    // dot, and takes the accent rather than a tag colour. No new colours: the
+    // surface is an alpha of the accent, the text a T.QN token.
+    component QueryChip: Rectangle {
+        id: chip
+        property string query: ""
+        signal clicked()
+        signal removeClicked()
+
+        implicitHeight: Kirigami.Units.gridUnit * 1.15
+        implicitWidth: chipRow.implicitWidth + Kirigami.Units.smallSpacing * 2
+        Layout.maximumWidth: Kirigami.Units.gridUnit * 10
+        radius: height / 2
+        color: T.QN.alpha(full.accent, 0.18)
+        border.width: 1
+        border.color: T.QN.alpha(full.accent, 0.6)
+
+        RowLayout {
+            id: chipRow
+            anchors.fill: parent
+            anchors.leftMargin: Kirigami.Units.smallSpacing
+            anchors.rightMargin: Kirigami.Units.smallSpacing
+            spacing: Kirigami.Units.smallSpacing * 0.7
+
+            Kirigami.Icon {
+                source: "search"
+                color: full.accent
+                Layout.preferredWidth: Kirigami.Units.iconSizes.small * 0.8
+                Layout.preferredHeight: Kirigami.Units.iconSizes.small * 0.8
+            }
+            PlasmaComponents.Label {
+                Layout.fillWidth: true
+                text: i18nc("@label the active search query, shown as a removable chip", "“%1”", chip.query)
+                elide: Text.ElideRight
+                font: Kirigami.Theme.smallFont
+                color: T.QN.text
+            }
+            PlasmaComponents.Label {
+                text: "✕"
+                color: T.QN.textDim
+                font: Kirigami.Theme.smallFont
+                MouseArea {
+                    anchors.fill: parent
+                    anchors.margins: -3
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: chip.removeClicked()
+                }
+            }
+        }
+
+        QQC2.ToolTip.text: i18n("Searching for “%1” — click to edit, ✕ to clear", chip.query)
+        QQC2.ToolTip.visible: chipHover.hovered
+        HoverHandler { id: chipHover; cursorShape: Qt.PointingHandCursor }
+        MouseArea {
+            anchors.fill: parent
+            acceptedButtons: Qt.LeftButton
+            onClicked: chip.clicked()
+            z: -1
         }
     }
 
