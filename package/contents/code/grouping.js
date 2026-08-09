@@ -28,6 +28,27 @@ function openTodos(list) {
     return list.filter(function (t) { return t.status !== "done"; });
 }
 
+// { overdue, today }, each sorted the same way sortTodos orders a list —
+// so a to-do that lands in the dashboard's Due pane sorts the same as it
+// would in the To-Do pane. Purely additive: does not touch openTodos or
+// sortTodos, and existing callers (TodoView, RemindersView) never call this.
+// opts: { nowMs }
+function todoDueBuckets(list, opts) {
+    opts = opts || {};
+    var res = { overdue: [], today: [] };
+    var open = openTodos(list || []);
+    for (var i = 0; i < open.length; i++) {
+        var t = open[i];
+        if (!t.dueAt) continue;
+        var st = Fmt.dueState(t.dueAt, opts.nowMs);
+        if (st === "overdue") res.overdue.push(t);
+        else if (st === "today") res.today.push(t);
+    }
+    res.overdue = sortTodos(res.overdue);
+    res.today = sortTodos(res.today);
+    return res;
+}
+
 // ---------------------------------------------------------- reminders --------
 // Effective due and "still live" are Model's definitions; re-exported here so a
 // view never has to decide for itself what a snoozed or acked reminder means.

@@ -566,6 +566,7 @@ Item {
     Component { id: dashboardComp
         DashboardView {
             controller: full.controller; nowMs: full.nowMs; use24h: full.use24h; accent: full.accent
+            defaultNoteColor: Plasmoid.configuration.defaultNoteColor
             onModeRequested: (m) => full.selectMode(m)
             onOpenRequested: (id) => full.openNote(id)
             onTagFilterRequested: (t, m) => { full.tagFilter = t; full.selectMode(m); }

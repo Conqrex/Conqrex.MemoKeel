@@ -21,6 +21,10 @@ ColumnLayout {
     property double nowMs: 0
     property bool use24h: true
     property color accent: Kirigami.Theme.highlightColor
+    // Fed by FullView (which alone has Plasmoid.configuration): the colour a
+    // dashboard-added note should get, so a note added from here is identical
+    // to one added from the Notes tab's own quick-add bar.
+    property string defaultNoteColor: ""
 
     signal modeRequested(string mode)
     signal openRequested(string id)
@@ -34,9 +38,23 @@ ColumnLayout {
     // legacy import), so every derived list has to tolerate a null doc.
     readonly property var doc: controller ? controller.doc : null
 
-    // How many items a pane shows before it defers to its own tab. Keeps a
-    // stacked pane short enough that all three stay reachable by scrolling.
-    readonly property int maxItems: 6
+    // How many items a pane shows before it defers to its own tab. Side by
+    // side there is room for the usual 6; stacked, every pane is full width
+    // but competes for the same vertical scroll, so it is cut to 4.
+    //
+    // That 4 is measured, not guessed (see package/contents/ui/_measure_harness.qml,
+    // run offscreen with PySide6): at the default popup size (32x30 gridUnit =
+    // 576x540px, gridUnit = 18px here), a to-do/reminder row is 53px, a pane's
+    // title row is 21px, a section label or "show more" row is 17px, and the
+    // dashboard's own row spacing is 2.4px. A stacked Due pane with one overdue
+    // section, one today section and a cap of 4 combined rows costs at most
+    // 21 (title) + 2x17 (section labels) + 4x53 (rows) + 17 (more link) + 6x2.4
+    // (gaps) ≈ 302px — comfortably inside the ~408px the popup leaves for the
+    // content area once its header, tab bar and footer chrome are subtracted
+    // from the 540px popup height, so the Due pane never needs scrolling into
+    // view. Six would have cost ≈ 21 + 2x17 + 6x53 + 17 + 6x2.4 ≈ 408px, right
+    // at the edge with no room to also see the start of the next pane.
+    readonly property int maxItems: view.stacked ? 4 : 6
 
     // Measured, not guessed. A to-do row's chrome (status circle, four action
     // buttons, margins) is a constant 6.7 gridUnits whatever the width, and the
@@ -48,7 +66,11 @@ ColumnLayout {
     // it, so stacked is the normal case and side by side is what a widened
     // popup or a desktop widget gets.
     readonly property real stackBelow: Kirigami.Units.gridUnit * 51
-    readonly property bool stacked: width > 0 && width < view.stackBelow
+    // Width starts at 0 during initial layout, before the first geometry pass;
+    // treating that as "not stacked" made the grid build 3 columns and then
+    // immediately relayout to 1, a visible flash. width < stackBelow is true at
+    // width == 0 too, so stacked is now the correct answer from the first paint.
+    readonly property bool stacked: width < view.stackBelow
 
     // ---- data ---------------------------------------------------------------
     // Archived items are deliberately never on the dashboard, whatever the
@@ -68,7 +90,48 @@ ColumnLayout {
     readonly property var buckets: Grouping.reminderBuckets(view.doc, { nowMs: view.nowMs })
     readonly property var overdueItems: buckets.overdue
     readonly property var todayItems: buckets.today
-    readonly property int dueCount: overdueItems.length + todayItems.length
+
+    // To-dos that are overdue or due today belong in the Due pane too — it is
+    // titled "Due", not "Reminders", so a low-priority overdue task must not
+    // be invisible just because it lives in the To-Do pane's longer, lower
+    // (status/priority/due) sorted list. This never removes them from the
+    // To-Do pane; grouping.js's todoDueBuckets is purely additive there.
+    function computeTodoDue(d) {
+        if (!d) return { overdue: [], today: [] };
+        return Grouping.todoDueBuckets(Model.visibleItems(d.todos, { showArchived: false }), { nowMs: view.nowMs });
+    }
+    readonly property var todoDueBuckets: computeTodoDue(view.doc)
+
+    // One combined cap (view.maxItems) applies to the Due pane's whole content
+    // — overdue reminders, overdue to-dos, today's reminders and today's
+    // to-dos together — instead of separately capping each half as before
+    // (which could show up to 2x the cap). Overdue is filled first since it is
+    // the more urgent bucket; "extra" is the true remaining count across all
+    // four lists, not just whichever ran over.
+    function computeDuePane(reminderBuckets, todoBuckets) {
+        var remaining = view.maxItems;
+        function take(list) {
+            if (remaining <= 0) return [];
+            var n = Math.min(list.length, remaining);
+            remaining -= n;
+            return list.slice(0, n);
+        }
+        var overdueReminders = take(reminderBuckets.overdue);
+        var overdueTodos = take(todoBuckets.overdue);
+        var todayReminders = take(reminderBuckets.today);
+        var todayTodos = take(todoBuckets.today);
+        var overdueCount = reminderBuckets.overdue.length + todoBuckets.overdue.length;
+        var todayCount = reminderBuckets.today.length + todoBuckets.today.length;
+        var total = overdueCount + todayCount;
+        var shown = overdueReminders.length + overdueTodos.length + todayReminders.length + todayTodos.length;
+        return {
+            overdueReminders: overdueReminders, overdueTodos: overdueTodos,
+            todayReminders: todayReminders, todayTodos: todayTodos,
+            overdueCount: overdueCount, todayCount: todayCount,
+            total: total, extra: total - shown
+        };
+    }
+    readonly property var duePane: computeDuePane(view.buckets, view.todoDueBuckets)
 
     function head(list) { return list.slice(0, view.maxItems); }
     function tagsMap() { return view.doc ? view.doc.tags : ({}); }
@@ -79,7 +142,7 @@ ColumnLayout {
     // the mode's own tab.
     function addNoteFrom(p) {
         if (!view.doc || ((!p.text || p.text === "") && p.tagNames.length === 0)) return;
-        var id = view.controller.addNote({ title: p.text });
+        var id = view.controller.addNote({ title: p.text, color: view.defaultNoteColor });
         if (id && p.tagNames.length) view.controller.applyTagNames("notes", id, p.tagNames);
     }
     function addTodoFrom(p) {
@@ -140,11 +203,18 @@ ColumnLayout {
             rowSpacing: Kirigami.Units.smallSpacing * 1.5
 
             // Equal preferred widths + fillWidth = three equal columns; in one
-            // column it simply fills the width.
+            // column it simply fills the width. Side by side the declaration
+            // order (Notes, To-Do, Due) is the visual order, left to right —
+            // explicit Layout.row/column below just spells that out. Stacked,
+            // the order flips to Due, To-Do, Notes: the pane titled "Due" is
+            // the one thing that must be visible without scrolling, so it goes
+            // first instead of ending up ~1.5 screens down.
             DashboardPane {
                 Layout.fillWidth: true
                 Layout.fillHeight: !view.stacked
                 Layout.preferredWidth: 1
+                Layout.row: view.stacked ? 2 : 0
+                Layout.column: view.stacked ? 0 : 0
                 bodyScrolls: !view.stacked
                 title: i18n("Notes")
                 iconName: "view-pim-notes"
@@ -158,6 +228,8 @@ ColumnLayout {
                 Layout.fillWidth: true
                 Layout.fillHeight: !view.stacked
                 Layout.preferredWidth: 1
+                Layout.row: view.stacked ? 1 : 0
+                Layout.column: view.stacked ? 0 : 1
                 bodyScrolls: !view.stacked
                 title: i18n("To-Do")
                 iconName: "view-pim-tasks"
@@ -171,13 +243,16 @@ ColumnLayout {
                 Layout.fillWidth: true
                 Layout.fillHeight: !view.stacked
                 Layout.preferredWidth: 1
+                Layout.row: view.stacked ? 0 : 0
+                Layout.column: view.stacked ? 0 : 2
                 bodyScrolls: !view.stacked
                 title: i18n("Due")
                 iconName: "appointment-reminder"
                 // Overdue work is the one thing that should shout, so this pane
-                // wears the negative colour whenever something is late.
-                tint: view.overdueItems.length > 0 ? Kirigami.Theme.negativeTextColor : view.accent
-                count: view.dueCount
+                // wears the negative colour whenever something is late — a
+                // to-do counts here exactly like a reminder does.
+                tint: view.duePane.overdueCount > 0 ? Kirigami.Theme.negativeTextColor : view.accent
+                count: view.duePane.total
                 onTitleActivated: view.modeRequested("reminders")
                 bodyComponent: dueBody
             }
@@ -275,22 +350,26 @@ ColumnLayout {
             spacing: Kirigami.Units.smallSpacing * 0.6
             QN.EmptyState {
                 Layout.fillWidth: true
-                visible: view.dueCount === 0
+                visible: view.duePane.total === 0
                 icon: "appointment-reminder"
                 title: i18n("Nothing due")
-                hint: i18n("Reminders that are late or due today land here.")
+                hint: i18n("Reminders and to-dos that are late or due today land here.")
             }
 
             // Overdue first, in the negative accent, then what is due today.
+            // Each section mixes reminders (ReminderRow) and to-dos (TodoRow,
+            // reused as-is — it already carries its own priority/due badges)
+            // under one combined cap, computed once by view.duePane so the
+            // section counts and the single "show more" below always agree.
             SectionLabel {
                 Layout.fillWidth: true
-                visible: view.overdueItems.length > 0
+                visible: view.duePane.overdueCount > 0
                 label: i18n("Overdue")
                 dot: Kirigami.Theme.negativeTextColor
-                count: view.overdueItems.length
+                count: view.duePane.overdueCount
             }
             Repeater {
-                model: view.head(view.overdueItems)
+                model: view.duePane.overdueReminders
                 delegate: ReminderRow {
                     required property var modelData
                     Layout.fillWidth: true
@@ -304,21 +383,30 @@ ColumnLayout {
                     canEditTime: false
                 }
             }
-            MoreLink {
-                Layout.alignment: Qt.AlignHCenter
-                extra: view.overdueItems.length - view.maxItems
-                mode: "reminders"
+            Repeater {
+                model: view.duePane.overdueTodos
+                delegate: TodoRow {
+                    required property var modelData
+                    Layout.fillWidth: true
+                    controller: view.controller
+                    todo: modelData
+                    tagsMap: view.tagsMap()
+                    nowMs: view.nowMs
+                    use24h: view.use24h
+                    accentFallback: view.accent
+                    onTagActivated: (t) => view.tagFilterRequested(t, "todo")
+                }
             }
 
             SectionLabel {
                 Layout.fillWidth: true
-                visible: view.todayItems.length > 0
+                visible: view.duePane.todayCount > 0
                 label: i18n("Today")
                 dot: Kirigami.Theme.neutralTextColor
-                count: view.todayItems.length
+                count: view.duePane.todayCount
             }
             Repeater {
-                model: view.head(view.todayItems)
+                model: view.duePane.todayReminders
                 delegate: ReminderRow {
                     required property var modelData
                     Layout.fillWidth: true
@@ -330,9 +418,27 @@ ColumnLayout {
                     canEditTime: false
                 }
             }
+            Repeater {
+                model: view.duePane.todayTodos
+                delegate: TodoRow {
+                    required property var modelData
+                    Layout.fillWidth: true
+                    controller: view.controller
+                    todo: modelData
+                    tagsMap: view.tagsMap()
+                    nowMs: view.nowMs
+                    use24h: view.use24h
+                    accentFallback: view.accent
+                    onTagActivated: (t) => view.tagFilterRequested(t, "todo")
+                }
+            }
+
+            // One link for the whole pane (FIX 4): the true remaining count
+            // across overdue+today, reminders+todos combined — not a separate
+            // (and previously doubled) count per section.
             MoreLink {
                 Layout.alignment: Qt.AlignHCenter
-                extra: view.todayItems.length - view.maxItems
+                extra: view.duePane.extra
                 mode: "reminders"
             }
         }
