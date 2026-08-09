@@ -101,7 +101,7 @@
         </entry>
         <entry name="popupWidthUnits" type="Int">
             <label>Popup width in grid units</label>
-            <default>26</default>
+            <default>35</default>
             <min>16</min>
         </entry>
         <entry name="popupHeightUnits" type="Int">

@@ -76,9 +76,10 @@ Item {
         readonly property int n: kroot.columns.length
         readonly property real gap: Kirigami.Units.smallSpacing
         readonly property real addW: Kirigami.Units.gridUnit * 2
-        readonly property real minCol: Kirigami.Units.gridUnit * 10
-        // fit-to-width: columns share space; never below minCol
-        readonly property real colW: Math.max(minCol, (width - addW - gap * (n + 1)) / Math.max(1, n))
+        readonly property real minCol: Kirigami.Units.gridUnit * 8
+        // fit-to-width: columns share space; never below minCol.
+        // The Row holds n columns plus the add-column strip → n internal gaps.
+        readonly property real colW: Math.max(minCol, (width - addW - gap * n) / Math.max(1, n))
 
         Row {
             id: colRow
@@ -92,9 +93,17 @@ Item {
                     required property var modelData
                     readonly property string colId: modelData.id
                     readonly property var cards: kroot.colCards(colId)
-                    readonly property bool overWip: modelData.wipLimit && cards.length > modelData.wipLimit
+                    readonly property bool overWip: !!modelData.wipLimit && cards.length > modelData.wipLimit
                     readonly property color colAccent: Theme.accentFor(modelData.color, kroot.accent)
                     readonly property int colIndex: kroot.columns.indexOf(modelData)
+                    // While a search query is active colCards() returns relevance order,
+                    // not board order, so a positional drop would land somewhere other
+                    // than the indicator showed. Fall back to plain move-to-column.
+                    readonly property bool positional: !(kroot.query && kroot.query.trim() !== "")
+                    // reactive position of the card list inside this column (no mapToItem,
+                    // which has no tracked dependency and would evaluate only once)
+                    readonly property real listLeft: colBody.x + cardList.x
+                    readonly property real listTop: colBody.y + cardList.y
 
                     width: hflick.colW
                     height: colRow.height
@@ -104,28 +113,53 @@ Item {
                     border.color: drop.containsDrag ? T.QN.alpha(col.colAccent, 0.7)
                                 : col.overWip ? T.QN.alpha(Theme.PALETTE.rose, 0.6) : T.QN.border
 
-                    // pending insertion index while a card hovers over this column
-                    QtObject { id: dropIdx; property int idx: -1 }
+                    // pending insertion index (and the id of the card being dragged, which
+                    // must be excluded from the index math because its delegate has been
+                    // reparented into the drag layer and its y is no longer list-relative)
+                    QtObject { id: dropIdx; property int idx: -1; property string dragId: "" }
+
+                    function dragIdOf(d) { return (d && d.source && d.source.cardId) ? d.source.cardId : ""; }
+                    function track(d) {
+                        dropIdx.dragId = col.dragIdOf(d);
+                        dropIdx.idx = col.positional ? cardList.insertIndexAt(d.y, dropIdx.dragId) : -1;
+                    }
 
                     DropArea {
                         id: drop
                         anchors.fill: parent
-                        onPositionChanged: (d) => { dropIdx.idx = cardList.insertIndexAt(d.y); }
-                        onExited: dropIdx.idx = -1
+                        onEntered: (d) => col.track(d)
+                        onPositionChanged: (d) => col.track(d)
+                        onExited: { dropIdx.idx = -1; dropIdx.dragId = ""; }
                         onDropped: (d) => {
                             var s = d.source;
                             if (s && s.cardId) {
-                                var i = cardList.insertIndexAt(d.y);
-                                var before = (i >= 0 && i < col.cards.length) ? col.cards[i].id : null;
-                                if (before === s.cardId) before = null;
-                                kroot.controller.moveCard(s.cardId, col.colId, before);
+                                // current position of the dragged card inside this column (-1 if foreign)
+                                var cur = -1;
+                                for (var k = 0; k < col.cards.length; k++)
+                                    if (col.cards[k].id === s.cardId) { cur = k; break; }
+                                if (!col.positional) {
+                                    // search order ≠ board order: only a column change is meaningful
+                                    if (cur < 0) kroot.controller.moveCard(s.cardId, col.colId, null);
+                                } else {
+                                    var i = cardList.insertIndexAt(d.y, s.cardId);
+                                    // index i is into the list with the dragged card removed, which is
+                                    // exactly what Model.moveCardBefore's sibling list looks like
+                                    var rest = col.cards.filter(function (c) { return c.id !== s.cardId; });
+                                    // dropped exactly where it already was → genuine no-op
+                                    if (cur < 0 || i !== cur) {
+                                        var before = (i >= 0 && i < rest.length) ? rest[i].id : null;
+                                        kroot.controller.moveCard(s.cardId, col.colId, before);
+                                    }
+                                }
                             }
                             dropIdx.idx = -1;
+                            dropIdx.dragId = "";
                             d.accept();
                         }
                     }
 
                     ColumnLayout {
+                        id: colBody
                         anchors.fill: parent
                         anchors.margins: Kirigami.Units.smallSpacing
                         spacing: Kirigami.Units.smallSpacing * 0.6
@@ -209,14 +243,37 @@ Item {
                             model: col.cards
                             QQC2.ScrollBar.vertical: QQC2.ScrollBar { id: cardBar }
 
-                            // map a y in column coords to an insertion index
-                            function insertIndexAt(colY) {
-                                var y = colY - cardList.mapToItem(col, 0, 0).y + cardList.contentY;
-                                for (var i = 0; i < count; i++) {
-                                    var it = itemAtIndex(i);
-                                    if (it && y < it.y + it.height / 2) return i;
+                            // Map a y in column coords to an insertion index into the card
+                            // list *with excludeId removed*. The dragged delegate is
+                            // reparented into the drag layer while dragging, so its y is in
+                            // another coordinate space and must never be read here.
+                            function insertIndexAt(colY, excludeId) {
+                                var y = colY - col.listTop + cardList.contentY;
+                                var n = 0;
+                                for (var i = 0; i < cardList.count; i++) {
+                                    var c = col.cards[i];
+                                    if (excludeId && c && c.id === excludeId) continue;
+                                    var it = cardList.itemAtIndex(i);
+                                    if (it && y < it.y + it.height / 2) return n;
+                                    n++;
                                 }
-                                return count;
+                                return n;
+                            }
+
+                            // y (in list coords) of the insert line for an index produced by
+                            // insertIndexAt — same filtered walk, so the two always agree.
+                            function indicatorY(idx, excludeId) {
+                                if (idx <= 0) return 0;
+                                var n = 0, last = null;
+                                for (var i = 0; i < cardList.count; i++) {
+                                    var c = col.cards[i];
+                                    if (excludeId && c && c.id === excludeId) continue;
+                                    var it = cardList.itemAtIndex(i);
+                                    if (it) last = it;
+                                    n++;
+                                    if (n >= idx) break;
+                                }
+                                return last ? last.y + last.height + cardList.spacing / 2 - cardList.contentY : 0;
                             }
 
                             delegate: KanbanCard {
@@ -253,14 +310,11 @@ Item {
                         height: 2
                         radius: 1
                         color: col.colAccent
-                        x: cardList.mapToItem(col, 0, 0).x
+                        x: col.listLeft
                         width: cardList.width
-                        y: {
-                            var base = cardList.mapToItem(col, 0, 0).y;
-                            if (dropIdx.idx <= 0) return base;
-                            var it = cardList.itemAtIndex(Math.min(dropIdx.idx, cardList.count) - 1);
-                            return it ? base + it.y + it.height + cardList.spacing / 2 - cardList.contentY : base;
-                        }
+                        // clamped to the list viewport so it never draws over the pinned quick-add
+                        y: col.listTop + Math.max(0, Math.min(cardList.height - dropLine.height,
+                                                              cardList.indicatorY(dropIdx.idx, dropIdx.dragId)))
                     }
                 }
             }

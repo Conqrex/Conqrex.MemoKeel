@@ -39,8 +39,18 @@ QN.NeonCard {
 
     HoverHandler { id: ch }
     TapHandler {
+        id: cardTap
         acceptedButtons: Qt.LeftButton
-        onTapped: card.editRequested(card.cardId)
+        // Same threshold as the DragHandler: a gesture is either a drag or a tap,
+        // never both. (The default is the system startDragDistance, which is larger
+        // than the drag threshold below, so a short drag used to do both.)
+        dragThreshold: drag.dragThreshold
+        onTapped: (ep) => {
+            // the ⋮ button is a child of the card; a tap on it must not also open the editor
+            if (menuBtn.enabled && menuBtn.contains(menuBtn.mapFromItem(card, ep.position)))
+                return;
+            card.editRequested(card.cardId);
+        }
     }
     DragHandler {
         id: drag
@@ -75,9 +85,12 @@ QN.NeonCard {
                 color: T.QN.text
             }
             QQC2.ToolButton {
+                id: menuBtn
                 icon.name: "application-menu"; flat: true
                 icon.width: Kirigami.Units.iconSizes.small; icon.height: Kirigami.Units.iconSizes.small
-                opacity: ch.hovered ? 1 : 0
+                opacity: ch.hovered || cardMenu.visible ? 1 : 0
+                // fully transparent → don't swallow clicks either
+                enabled: ch.hovered || cardMenu.visible
                 onClicked: cardMenu.open()
                 QQC2.Menu {
                     id: cardMenu
