@@ -572,15 +572,13 @@ Item {
             onTagFilterRequested: (t, m) => { full.tagFilter = t; full.selectMode(m); }
         }
     }
-    // Tags is listed by the tab bar; its view lands in the next task. Say so
-    // rather than silently showing some other mode's content.
     Component { id: tagsComp
-        QN.EmptyState {
-            anchors.centerIn: parent
-            width: parent ? parent.width : 0
-            icon: "tag"
-            title: i18n("Tags")
-            hint: i18n("This view is not available yet.")
+        TagsView {
+            controller: full.controller; accent: full.accent
+            // A chip in the cloud is a filter, not a mode of its own: set the
+            // global tag filter and hand the user to Search, which is the tab
+            // that lists items across every collection.
+            onTagActivated: (t) => { full.tagFilter = t; full.selectMode("search"); }
         }
     }
     Component { id: notesComp
@@ -617,9 +615,9 @@ Item {
     Component { id: searchComp
         SearchView {
             controller: full.controller; nowMs: full.nowMs; use24h: full.use24h; accent: full.accent
-            query: full.searchText
+            query: full.searchText; tagFilter: full.tagFilter
             onOpenRequested: (id) => full.openNote(id)
-            onTagActivated: (t) => full.tagFilter = t
+            onTagActivated: (t) => full.tagFilter = (full.tagFilter === t ? "" : t)
             onModeRequested: (m) => full.currentMode = m
         }
     }
