@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0
+      http://www.kde.org/standards/kcfg/1.0/kcfg.xsd">
+    <kcfgfile name=""/>
+    <group name="General">
+        <!-- These store UI state and preferences only — never the note data,
+             which lives in store.json under XDG_DATA_HOME. -->
+        <entry name="defaultMode" type="String">
+            <label>Startup view: notes, todo, kanban, reminders, board or search</label>
+            <default>notes</default>
+        </entry>
+        <entry name="lastMode" type="String">
+            <label>Last active view, restored on open</label>
+            <default>notes</default>
+        </entry>
+        <entry name="accent" type="String">
+            <label>Neon accent preset: cyan, sky, violet, lime, amber, rose or slate</label>
+            <default>cyan</default>
+        </entry>
+        <entry name="sortBy" type="String">
+            <label>List sort key: updated, created, title, priority or due</label>
+            <default>updated</default>
+        </entry>
+        <entry name="sortDescending" type="Bool">
+            <label>Sort descending</label>
+            <default>true</default>
+        </entry>
+        <entry name="showArchived" type="Bool">
+            <label>Include archived items in lists</label>
+            <default>false</default>
+        </entry>
+        <entry name="sidebarCollapsed" type="Bool">
+            <label>Collapse the navigation rail to icons only</label>
+            <default>false</default>
+        </entry>
+        <entry name="timeFormat24h" type="Bool">
+            <label>Use 24-hour time for due/reset labels</label>
+            <default>true</default>
+        </entry>
+        <entry name="reminderPollSeconds" type="Int">
+            <label>How often to check for due reminders, in seconds</label>
+            <default>30</default>
+            <min>15</min>
+        </entry>
+        <entry name="remindersEnabled" type="Bool">
+            <label>Fire native desktop notifications for due reminders</label>
+            <default>true</default>
+        </entry>
+        <entry name="notifyUrgency" type="String">
+            <label>Notification urgency: low, normal or critical</label>
+            <default>normal</default>
+        </entry>
+        <entry name="autosaveDebounceMs" type="Int">
+            <label>Idle delay before committing edits to disk, in milliseconds</label>
+            <default>600</default>
+            <min>200</min>
+        </entry>
+        <entry name="trashRetentionDays" type="Int">
+            <label>Days a deleted item stays recoverable in the trash</label>
+            <default>14</default>
+            <min>1</min>
+        </entry>
+        <entry name="backupCount" type="Int">
+            <label>Number of rolling auto-snapshots to keep</label>
+            <default>10</default>
+            <min>0</min>
+        </entry>
+        <entry name="autoBackupDaily" type="Bool">
+            <label>Write a snapshot once per day</label>
+            <default>false</default>
+        </entry>
+        <entry name="attachmentsEnabled" type="Bool">
+            <label>Allow image/file attachments</label>
+            <default>true</default>
+        </entry>
+        <entry name="maxAttachmentMB" type="Int">
+            <label>Reject attachments larger than this many megabytes</label>
+            <default>25</default>
+            <min>1</min>
+        </entry>
+        <entry name="enableKanban" type="Bool">
+            <label>Show the Kanban board mode</label>
+            <default>true</default>
+        </entry>
+        <entry name="enableBoard" type="Bool">
+            <label>Show the freeform Board mode</label>
+            <default>false</default>
+        </entry>
+        <entry name="enableWikiLinks" type="Bool">
+            <label>Parse [[wiki-links]] and show backlinks</label>
+            <default>true</default>
+        </entry>
+        <entry name="defaultNoteColor" type="String">
+            <label>Neon color applied to new notes (empty = default)</label>
+            <default></default>
+        </entry>
+        <entry name="popupWidthUnits" type="Int">
+            <label>Popup width in grid units</label>
+            <default>26</default>
+            <min>16</min>
+        </entry>
+        <entry name="popupHeightUnits" type="Int">
+            <label>Popup height in grid units</label>
+            <default>26</default>
+            <min>14</min>
+        </entry>
+        <entry name="dataDirOverride" type="String">
+            <label>Explicit data directory (empty = StandardPaths default)</label>
+            <default></default>
+        </entry>
+        <entry name="deviceId" type="String">
+            <label>Random per-install id, generated on first run</label>
+            <default></default>
+        </entry>
+        <entry name="lastKnownRev" type="Int">
+            <label>Last document revision this instance persisted</label>
+            <default>0</default>
+        </entry>
+    </group>
+</kcfg>

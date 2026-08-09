@@ -1,0 +1,19 @@
+{
+    "KPlugin": {
+        "Id": "com.conqrex.quicknotes",
+        "Name": "Conqrex Quick Notes",
+        "Description": "A professional quick-noting hub: markdown notes, to-do lists, a kanban board, reminders with desktop notifications, tags, global search and image attachments — all in one neon-glass widget.",
+        "Icon": "com.conqrex.quicknotes",
+        "Category": "Utilities",
+        "License": "MIT",
+        "Version": "0.1.1",
+        "Authors": [
+            {
+                "Name": "S. Aydin Icen",
+                "Email": "saydinicen9@gmail.com"
+            }
+        ]
+    },
+    "KPackageStructure": "Plasma/Applet",
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

@@ -1,0 +1,10 @@
+# editor / build cruft
+*.kdev4
+.kdev4/
+.DS_Store
+*.swp
+*~
+
+# local test data / scratch stores
+/tmp-store/
+*.local.json
