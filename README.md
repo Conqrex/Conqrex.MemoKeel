@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="package/contents/icons/quick-notes-banner.png" alt="Conqrex Quick Notes" width="720">
+  <img src="assets/quick-notes-banner.png" alt="Conqrex Quick Notes" width="720">
 </p>
 
 <p align="center">
@@ -44,7 +44,7 @@ and its tooltip previews your next reminder.
 ## 📦 Install
 
 ```sh
-git clone <repo-url>
+git clone https://github.com/Conqrex/Conqrex.QuickNotes.git
 cd Conqrex.QuickNotes
 ./install.sh            # installs or upgrades, per-user (no sudo)
 ```
@@ -141,6 +141,17 @@ bodies before producing RichText, so content can't inject markup.
 
 [**Conqrex.OctoPulse**](https://github.com/Conqrex/Conqrex.OctoPulse) — every GitHub Actions run in one panel widget.
 [**Conqrex.Dockswain**](https://github.com/Conqrex/Conqrex.Dockswain) — manage Docker hosts over SSH from your panel.
+
+## ⚠️ Known issues
+
+- **Two copies of the widget share one theme setting.** If you add Quick Notes
+  twice to the same Plasma session, the *Follow system theme* switch is not
+  per-instance: flipping it in one copy re-themes both. Each copy still keeps
+  its own notes, board and reminders.
+- **Upgrading keeps your old popup size.** Plasma remembers the popup dimensions
+  from the version you had before, so after an upgrade the Kanban board may still
+  overflow its columns. Drag the popup's edge once to resize it and the new size
+  sticks. Fresh installs get the new defaults of **32 × 30 grid units**.
 
 ## 📄 License
 
