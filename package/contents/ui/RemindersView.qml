@@ -57,8 +57,21 @@ ColumnLayout {
     QN.DateTimePopup {
         id: duePicker
         property string forId: ""
-        onPicked: (when, repeat) => view.controller.updateItem("reminders", forId,
-            { dueAt: when.toISOString(), repeat: repeat, notified: false, ackedAt: null })
+        // Stored dueAt of the reminder being edited, in ms; NaN when unknown.
+        property double forDueMs: NaN
+        onPicked: (when, repeat) => {
+            // Only a real time change resets the delivery state. Using the
+            // picker purely to set a repeat must not un-ack the reminder or
+            // drag it back into an active bucket.
+            var patch = { repeat: repeat };
+            if (isNaN(duePicker.forDueMs) || when.getTime() !== duePicker.forDueMs) {
+                patch.dueAt = when.toISOString();
+                patch.snoozeUntil = null;   // a new time supersedes any snooze
+                patch.notified = false;
+                patch.ackedAt = null;
+            }
+            view.controller.updateItem("reminders", duePicker.forId, patch);
+        }
     }
 
     QQC2.ScrollView {
@@ -143,6 +156,7 @@ ColumnLayout {
                                         icon.name: "appointment-new"; flat: true
                                         icon.width: Kirigami.Units.iconSizes.small; icon.height: Kirigami.Units.iconSizes.small
                                         onClicked: { duePicker.forId = rrow.modelData.id;
+                                                     duePicker.forDueMs = rrow.modelData.dueAt ? new Date(rrow.modelData.dueAt).getTime() : NaN;
                                                      duePicker.openFor(new Date(view.effDue(rrow.modelData)), rrow.modelData.repeat || "none"); }
                                         QQC2.ToolTip.text: i18n("Change time"); QQC2.ToolTip.visible: hovered
                                     }

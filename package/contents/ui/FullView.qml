@@ -84,6 +84,10 @@ Item {
             var colId = full.firstColumnId();
             if (!colId) colId = controller.addColumn({ title: i18n("To Do") });
             id = controller.addCard(colId, { title: p.text, priority: p.priority, dueAt: p.dueAt }); coll = "cards"; break;
+        case "reminders":
+            // Reminders are added by ReminderAddRow, which owns its own parsing
+            // and chip-based due time. Never fall through to creating a note.
+            return;
         default:
             id = controller.addNote({ title: p.text, color: Plasmoid.configuration.defaultNoteColor }); coll = "notes"; break;
         }
@@ -197,6 +201,7 @@ Item {
             Layout.fillWidth: true
             visible: full.currentMode === "reminders"
             controller: full.controller
+            onAdded: toast.show(i18n("Reminder added"))
         }
 
         // nav rail + content ----------------------------------------------

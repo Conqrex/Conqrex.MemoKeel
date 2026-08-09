@@ -4,8 +4,11 @@ import QtQuick.Controls as QQC2
 import org.kde.kirigami as Kirigami
 import "components" as QN
 import "theme" as T
+import "../code/tokens.js" as Tokens
 
-// Reminder add row: text + time chips + custom picker. No token syntax needed.
+// Reminder add row: text + time chips + custom picker. No token syntax needed,
+// but the shared #tag/!priority/^due parser still runs so anyone who types a
+// token gets what they asked for — a typed ^due beats the selected chip.
 ColumnLayout {
     id: row
 
@@ -30,13 +33,20 @@ ColumnLayout {
     }
 
     function submit() {
-        var text = field.text.trim();
-        if (text === "") return;
-        var due = chipDue(row.chipIndex);
+        var raw = field.text.trim();
+        if (raw === "") return;
+        var p = Tokens.parse(raw);
+        if (p.text === "") return;
+        // A typed ^token wins over the chip; otherwise the chip selection applies.
+        var due = p.dueAt ? new Date(p.dueAt) : chipDue(row.chipIndex);
         if (isNaN(due.getTime())) { picker.openFor(new Date(Date.now() + 3600000), row.customRepeat); return; }
-        row.controller.addReminder({ text: text, dueAt: due.toISOString(),
-                                     repeat: row.chipIndex === 4 ? row.customRepeat : "none" });
+        var id = row.controller.addReminder({ text: p.text, dueAt: due.toISOString(),
+                                              repeat: row.chipIndex === 4 ? row.customRepeat : "none" });
+        if (id && p.tagNames.length) row.controller.applyTagNames("reminders", id, p.tagNames);
         field.text = "";
+        row.chipIndex = 0;
+        row.customWhen = new Date(NaN);
+        row.customRepeat = "none";
         row.added();
     }
 
