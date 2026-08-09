@@ -25,7 +25,7 @@ Item {
         Notification {
             componentName: "plasma_workspace"
             eventId: "notification"
-            iconName: "com.conqrex.quicknotes"
+            iconName: "com.conqrex.memokeel"
             autoDelete: true
         }
     }
@@ -37,6 +37,6 @@ Item {
             });
             if (o) { o.sendEvent(); return; }
         }
-        if (runCommand) runCommand("notify-send -a " + shq("Quick Notes") + " " + shq(title) + " " + shq(text));
+        if (runCommand) runCommand("notify-send -a " + shq("MemoKeel") + " " + shq(title) + " " + shq(text));
     }
 }

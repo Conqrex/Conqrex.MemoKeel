@@ -34,7 +34,7 @@ MouseArea {
         anchors.centerIn: parent
         width: ca.side
         height: ca.side
-        source: "com.conqrex.quicknotes"
+        source: "com.conqrex.memokeel"
         // fall back to a generic note icon if the package icon doesn't resolve
         fallback: "view-pim-notes"
         active: ca.containsMouse

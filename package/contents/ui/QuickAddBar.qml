@@ -13,9 +13,13 @@ import "../code/tokens.js" as Tokens
 RowLayout {
     id: bar
     property string placeholder: i18n("Quick add… (#tag !priority ^due)")
+    // keyboard hint rendered dimmed inside the field, e.g. "Ctrl+N"
+    property string hint: ""
     signal addRequested(var payload)
 
     spacing: Kirigami.Units.smallSpacing
+
+    function focusField() { field.forceActiveFocus(); }
 
     // Token parsing lives in code/tokens.js so ReminderAddRow shares it verbatim.
     function submit() {
@@ -41,6 +45,20 @@ RowLayout {
         }
         color: T.QN.text
         placeholderTextColor: T.QN.textFaint
+        rightPadding: hintLabel.visible
+                      ? hintLabel.implicitWidth + Kirigami.Units.smallSpacing * 3
+                      : Kirigami.Units.smallSpacing * 2
+
+        QQC2.Label {
+            id: hintLabel
+            visible: bar.hint !== "" && field.text === ""
+            anchors.right: parent.right
+            anchors.rightMargin: Kirigami.Units.smallSpacing * 1.5
+            anchors.verticalCenter: parent.verticalCenter
+            text: bar.hint
+            color: T.QN.textFaint
+            font: Kirigami.Theme.smallFont
+        }
     }
     QQC2.Button {
         icon.name: "list-add"

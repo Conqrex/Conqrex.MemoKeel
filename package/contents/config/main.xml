@@ -8,12 +8,12 @@
         <!-- These store UI state and preferences only — never the note data,
              which lives in store.json under XDG_DATA_HOME. -->
         <entry name="defaultMode" type="String">
-            <label>Startup view: notes, todo, kanban, reminders, board or search</label>
-            <default>notes</default>
+            <label>Startup view: dashboard, notes, todo, kanban, reminders, board, search or tags</label>
+            <default>dashboard</default>
         </entry>
         <entry name="lastMode" type="String">
             <label>Last active view, restored on open</label>
-            <default>notes</default>
+            <default>dashboard</default>
         </entry>
         <entry name="accent" type="String">
             <label>Neon accent preset: cyan, sky, violet, lime, amber, rose or slate</label>
@@ -32,10 +32,6 @@
         </entry>
         <entry name="showArchived" type="Bool">
             <label>Include archived items in lists</label>
-            <default>false</default>
-        </entry>
-        <entry name="sidebarCollapsed" type="Bool">
-            <label>Collapse the navigation rail to icons only</label>
             <default>false</default>
         </entry>
         <entry name="timeFormat24h" type="Bool">

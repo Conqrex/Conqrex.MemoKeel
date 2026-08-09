@@ -20,6 +20,10 @@ ColumnLayout {
     property bool use24h: true
     property color accent: Kirigami.Theme.highlightColor
     property string query: ""
+    // The global tag filter. Search is where the Tags tab sends the user after
+    // a chip is clicked, so this tab has to honour it — with or without a typed
+    // query, otherwise that click lands on an empty page.
+    property string tagFilter: ""
 
     signal openRequested(string id)
     signal tagActivated(string tagId)
@@ -30,13 +34,23 @@ ColumnLayout {
     readonly property var doc: controller ? controller.doc : null
     readonly property var counts: doc ? Model.tagCounts(doc) : ({})
 
-    function results(d, q) {
+    function tagName(id) { return (view.doc && view.doc.tags[id]) ? view.doc.tags[id].name : ""; }
+
+    readonly property bool hasQuery: view.query.trim() !== ""
+    readonly property bool browsing: !view.hasQuery && view.tagFilter !== ""
+
+    function results(d, q, tagId) {
         if (!d) return [];
-        if (!q || q.trim() === "") return [];
+        var browse = (!q || q.trim() === "");
+        // No query and no tag is the idle state: nothing to list.
+        if (browse && !tagId) return [];
         var out = [];
         function add(items, type, mode) {
-            var ranked = Search.rank(q, items, d.tags);
-            for (var i = 0; i < ranked.length; i++) out.push({ item: ranked[i], type: type, mode: mode });
+            var pool = items.filter(function (it) { return Search.hasTag(it, tagId); });
+            // With a tag but no query there is nothing to rank against, so the
+            // whole tagged set is listed most-recently-updated first.
+            var picked = browse ? Model.sortItems(pool, "updated", true) : Search.rank(q, pool, d.tags);
+            for (var i = 0; i < picked.length; i++) out.push({ item: picked[i], type: type, mode: mode });
         }
         add(d.notes, "note", "notes");
         add(d.todos, "todo", "todo");
@@ -44,7 +58,7 @@ ColumnLayout {
         add(d.reminders, "reminder", "reminders");
         return out;
     }
-    readonly property var hits: results(doc, query)
+    readonly property var hits: results(doc, query, tagFilter)
 
     // tag cloud
     PlasmaComponents.Label {
@@ -65,6 +79,7 @@ ColumnLayout {
                 tagName: tag ? tag.name : ""
                 tagColor: tag ? Theme.accentFor(tag.color, view.accent) : view.accent
                 count: view.counts[modelData] || 0
+                active: view.tagFilter === modelData
                 onClicked: view.tagActivated(modelData)
             }
         }
@@ -72,11 +87,19 @@ ColumnLayout {
 
     QN.EmptyState {
         Layout.fillWidth: true; Layout.fillHeight: true
-        visible: view.query.trim() === "" || view.hits.length === 0
+        visible: view.hits.length === 0
         icon: "search"
-        title: view.query.trim() === "" ? i18n("Search everything") : i18n("No matches")
-        hint: view.query.trim() === "" ? i18n("Type above to search notes, to-dos, cards and reminders. Click a tag to filter.")
-                                       : i18n("Nothing matched “%1”.", view.query)
+        title: {
+            if (view.browsing) return i18n("Nothing tagged #%1", view.tagName(view.tagFilter));
+            if (!view.hasQuery) return i18n("Search everything");
+            return i18n("No matches");
+        }
+        hint: {
+            if (view.browsing) return i18n("Nothing carries this tag any more.");
+            if (!view.hasQuery) return i18n("Type above to search notes, to-dos, cards and reminders. Click a tag to filter.");
+            if (view.tagFilter !== "") return i18n("Nothing tagged #%1 matched “%2”.", view.tagName(view.tagFilter), view.query);
+            return i18n("Nothing matched “%1”.", view.query);
+        }
     }
 
     ListView {

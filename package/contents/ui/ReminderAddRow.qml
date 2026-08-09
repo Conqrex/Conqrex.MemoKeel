@@ -13,7 +13,11 @@ ColumnLayout {
     id: row
 
     property var controller
+    // keyboard hint rendered dimmed inside the field, e.g. "Ctrl+R"
+    property string hint: ""
     signal added()
+
+    function focusField() { field.forceActiveFocus(); }
 
     property int chipIndex: 0                 // default = In 1h
     property date customWhen: new Date(NaN)   // valid only after picker used
@@ -74,6 +78,20 @@ ColumnLayout {
             }
             color: T.QN.text
             placeholderTextColor: T.QN.textFaint
+            rightPadding: hintLabel.visible
+                          ? hintLabel.implicitWidth + Kirigami.Units.smallSpacing * 3
+                          : Kirigami.Units.smallSpacing * 2
+
+            QQC2.Label {
+                id: hintLabel
+                visible: row.hint !== "" && field.text === ""
+                anchors.right: parent.right
+                anchors.rightMargin: Kirigami.Units.smallSpacing * 1.5
+                anchors.verticalCenter: parent.verticalCenter
+                text: row.hint
+                color: T.QN.textFaint
+                font: Kirigami.Theme.smallFont
+            }
         }
         QQC2.Button { icon.name: "list-add"; text: i18n("Add"); highlighted: true; onClicked: row.submit() }
     }

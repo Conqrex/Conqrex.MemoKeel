@@ -10,22 +10,50 @@ import "components" as QN
 import "theme" as T
 import "../code/theme.js" as Theme
 
-// The popup shell: header, global search + quick-add, a left nav rail and a
-// content loader that swaps the active mode. Overlays host the note editor and
-// the trash. All data flows through `controller` (main.qml).
+// The popup shell: header, a top tab strip, an optional search bar, the add
+// bar and a full-width content loader that swaps the active mode. Overlays
+// host the note editor, the card editor and the trash. All data flows through
+// `controller` (main.qml).
 Item {
     id: full
 
     property var controller
     readonly property var doc: controller ? controller.doc : null
+    // A blocked legacy import leaves the controller with no document on
+    // purpose; everything that would act on one has to stand down.
+    readonly property bool migrationBlocked: !!controller && controller.migrationBlocked
+    readonly property bool hasDoc: full.doc !== null
     readonly property double nowMs: controller ? controller.nowMs : 0
     readonly property bool use24h: controller ? controller.use24h : true
     readonly property color accent: Theme.accentFor(controller ? controller.accentKey : "cyan",
                                                      Kirigami.Theme.highlightColor)
 
-    property string currentMode: "notes"
+    property string currentMode: "dashboard"
+    // The search *bar* is a collapsible filter over every mode. The Search
+    // *tab* has no field of its own, so the bar is pinned open while that tab
+    // is active — otherwise the tab would be a dead end with nothing to type
+    // into. `searchRequested` is the user's explicit toggle; `searchVisible`
+    // stays a pure binding so the toggle button can bind to it safely.
+    property bool searchRequested: false
+    readonly property bool searchPinned: full.currentMode === "search"
+    // Only the modes that actually take `query`/`tagFilter` may show the
+    // filtering chrome. Dashboard, Tags and Board render their own unfiltered
+    // content, so offering a field or a chip there would assert a filter the
+    // content does not obey. The filters themselves survive the visit: leaving
+    // Notes for Tags and coming back restores exactly what was set.
+    readonly property var filterableModes: ["notes", "todo", "kanban", "reminders", "search"]
+    readonly property bool filterable: full.filterableModes.indexOf(full.currentMode) >= 0
+    readonly property bool searchVisible: full.filterable && (full.searchRequested || full.searchPinned)
     property string searchText: ""
     property string tagFilter: ""
+    // A query that is live (being fed to the current view) but has no field on
+    // screen to show it. That state is what the header chip exists for: an
+    // invisible filter silently hiding items is the bug it prevents.
+    readonly property bool queryActive: full.filterable && full.searchText !== ""
+    readonly property bool queryChipVisible: full.queryActive && !full.searchVisible
+    // Same rule for the tag chip: only claim a filter on a tab that honours it.
+    readonly property bool tagChipVisible: full.filterable && full.tagFilter !== ""
+                                           && !!full.doc && !!full.doc.tags[full.tagFilter]
     property string editingNoteId: ""
     property string editingCardId: ""
     property bool showTrash: false
@@ -50,11 +78,39 @@ Item {
     Layout.minimumWidth: Kirigami.Units.gridUnit * 21
     Layout.minimumHeight: Kirigami.Units.gridUnit * 16
 
+    // A toast is only worth showing once there is somewhere to show it: inside an
+    // open popup, or on the desktop where the view is permanently visible.
+    readonly property bool canToast: full.everOpened || full.isDesktop
+
     Component.onCompleted: {
-        if (controller) full.currentMode = Plasmoid.configuration.lastMode || "notes";
+        if (controller) full.currentMode = Plasmoid.configuration.lastMode || "dashboard";
+        // The stored mode may name a tab the user has since switched off.
+        full.ensureModeAvailable();
         if (popupOpen) full.everOpened = true;
+        full.drainPendingStatus();
     }
-    onCurrentModeChanged: if (controller && currentMode !== "search") Plasmoid.configuration.lastMode = currentMode
+    onCurrentModeChanged: {
+        if (controller && full.currentMode !== "search") Plasmoid.configuration.lastMode = full.currentMode;
+        // The Search tab's only input is the shared bar above it.
+        if (full.currentMode === "search") searchBar.focusField();
+    }
+
+    // The tab model drops the modes the user turned off, so it is the authority
+    // on what may be shown — both for the mode restored at startup and for a
+    // mode that disappears because Kanban/Board was switched off while open.
+    function defaultTabMode() {
+        var d = controller ? ("" + Plasmoid.configuration.defaultMode) : "";
+        if (d !== "" && tabBar.indexOfMode(d) >= 0) return d;
+        if (tabBar.indexOfMode("dashboard") >= 0) return "dashboard";
+        return tabBar.modeAt(0);
+    }
+    function ensureModeAvailable() {
+        if (tabBar.indexOfMode(full.currentMode) < 0) full.selectMode(full.defaultTabMode());
+    }
+    Connections {
+        target: tabBar
+        function onModesChanged() { full.ensureModeAvailable(); }
+    }
 
     // surface controller status messages as toasts
     Connections {
@@ -62,6 +118,21 @@ Item {
         function onStatusMessageChanged() {
             if (controller.statusMessage !== "") { toast.show(controller.statusMessage); controller.statusMessage = ""; }
         }
+        function onPendingStatusMessageChanged() { full.drainPendingStatus(); }
+    }
+
+    // Messages raised at startup (the legacy-import notice) are parked in
+    // controller.pendingStatusMessage rather than statusMessage, because at that
+    // point either this item does not exist yet or the popup is shut and the
+    // toast would animate unseen. Drain it the first time we can actually show
+    // one; clearing it is what makes it show exactly once, not on every open.
+    onCanToastChanged: full.drainPendingStatus()
+    function drainPendingStatus() {
+        if (!controller || !full.canToast) return;
+        var msg = "" + controller.pendingStatusMessage;
+        if (msg === "") return;
+        controller.pendingStatusMessage = "";
+        toast.show(msg);
     }
 
     function openNote(id) { full.editingNoteId = id; }
@@ -74,7 +145,8 @@ Item {
 
     // route the quick-add bar to the active mode
     function handleAdd(p) {
-        if (!controller) return;
+        // No document means every intent below would patch `null`.
+        if (!controller || !full.hasDoc) return;
         if ((!p.text || p.text === "") && p.tagNames.length === 0) return;
         var id = "", coll = "notes";
         switch (full.currentMode) {
@@ -93,6 +165,88 @@ Item {
         }
         if (id && p.tagNames.length) controller.applyTagNames(coll, id, p.tagNames);
     }
+
+    // ---- navigation / shortcut helpers --------------------------------------
+    function selectMode(m) { if (m !== "") full.currentMode = m; }
+    // Ctrl+1…7 address tab positions, so resolve them through the tab bar's
+    // model, which has already dropped the modes the user turned off.
+    function selectTabIndex(i) { full.selectMode(tabBar.modeAt(i)); }
+
+    // Switch to a mode and put the caret in the field that adds to it.
+    function focusAdd(mode) {
+        full.selectMode(mode);
+        if (!full.hasDoc) return;
+        if (mode === "reminders") reminderAdd.focusField();
+        else quickAdd.focusField();
+    }
+
+    function showSearch() { full.searchRequested = true; searchBar.focusField(); }
+    // Collapsing is not "cancel": the query survives, so re-opening the bar
+    // (or landing on the Search tab) shows what the user last typed. A surviving
+    // query is never silent, though — the header chip takes over as its visible,
+    // removable representation for as long as the bar is down.
+    function hideSearch() { full.searchRequested = false; }
+    // The one place the query is dropped. Clearing the field (not just
+    // `searchText`) keeps the two in step, so re-opening the bar shows an
+    // empty field rather than text the views are no longer filtering by.
+    function clearSearch() { searchBar.clear(); }
+    function toggleSearch() {
+        // On the Search tab the bar cannot be collapsed, so the toggle just
+        // puts the caret back in it — without arming `searchRequested`, which
+        // would leave the bar open after the user moves to another tab.
+        if (full.searchPinned) { searchBar.focusField(); return; }
+        if (full.searchVisible) full.hideSearch(); else full.showSearch();
+    }
+
+    // Escape unwinds one layer at a time: overlays first, then the search text,
+    // then the search bar itself. It only ever claims a layer the user can
+    // actually see — a query on a tab that ignores it (`queryActive` is false
+    // there) is not a layer, so Escape falls through to closing the popup
+    // instead of quietly clearing something off screen.
+    function handleEscape() {
+        if (full.showTrash) { full.showTrash = false; return; }
+        if (full.editingCardId !== "") { full.editingCardId = ""; return; }
+        if (full.editingNoteId !== "") { full.editingNoteId = ""; return; }
+        if (full.queryActive) { full.clearSearch(); return; }
+        if (full.searchVisible && !full.searchPinned) full.searchRequested = false;
+    }
+
+    // Qt.WindowShortcut keeps these scoped to the window this view lives in.
+    // In a panel that window is the popup, which is only ours while it is
+    // open — hence the extra gate, so a closed widget never eats the desktop's
+    // Ctrl+F. Every binding carries a modifier, so a bare letter typed into a
+    // field is never swallowed: the add fields keep receiving "n", "t", "k".
+    readonly property bool shortcutsActive: full.popupOpen || full.isDesktop
+
+    Shortcut { sequence: "Ctrl+N"; context: Qt.WindowShortcut; enabled: full.shortcutsActive; onActivated: full.focusAdd("notes") }
+    Shortcut { sequence: "Ctrl+T"; context: Qt.WindowShortcut; enabled: full.shortcutsActive; onActivated: full.focusAdd("todo") }
+    Shortcut {
+        sequence: "Ctrl+K"
+        context: Qt.WindowShortcut
+        enabled: full.shortcutsActive && Plasmoid.configuration.enableKanban
+        onActivated: full.focusAdd("kanban")
+    }
+    Shortcut { sequence: "Ctrl+R"; context: Qt.WindowShortcut; enabled: full.shortcutsActive; onActivated: full.focusAdd("reminders") }
+    // Ctrl+F is only a real action on a tab whose view takes the query.
+    Shortcut { sequence: "Ctrl+F"; context: Qt.WindowShortcut; enabled: full.shortcutsActive && full.filterable; onActivated: full.toggleSearch() }
+    // Only claim Escape when there is a layer to unwind; otherwise it must keep
+    // falling through to Plasma, which closes the popup with it.
+    Shortcut {
+        sequence: "Escape"
+        context: Qt.WindowShortcut
+        enabled: full.shortcutsActive
+                 && (full.showTrash || full.editingCardId !== "" || full.editingNoteId !== ""
+                     || full.queryActive
+                     || (full.searchVisible && !full.searchPinned))
+        onActivated: full.handleEscape()
+    }
+    Shortcut { sequence: "Ctrl+1"; context: Qt.WindowShortcut; enabled: full.shortcutsActive && tabBar.modeAt(0) !== ""; onActivated: full.selectTabIndex(0) }
+    Shortcut { sequence: "Ctrl+2"; context: Qt.WindowShortcut; enabled: full.shortcutsActive && tabBar.modeAt(1) !== ""; onActivated: full.selectTabIndex(1) }
+    Shortcut { sequence: "Ctrl+3"; context: Qt.WindowShortcut; enabled: full.shortcutsActive && tabBar.modeAt(2) !== ""; onActivated: full.selectTabIndex(2) }
+    Shortcut { sequence: "Ctrl+4"; context: Qt.WindowShortcut; enabled: full.shortcutsActive && tabBar.modeAt(3) !== ""; onActivated: full.selectTabIndex(3) }
+    Shortcut { sequence: "Ctrl+5"; context: Qt.WindowShortcut; enabled: full.shortcutsActive && tabBar.modeAt(4) !== ""; onActivated: full.selectTabIndex(4) }
+    Shortcut { sequence: "Ctrl+6"; context: Qt.WindowShortcut; enabled: full.shortcutsActive && tabBar.modeAt(5) !== ""; onActivated: full.selectTabIndex(5) }
+    Shortcut { sequence: "Ctrl+7"; context: Qt.WindowShortcut; enabled: full.shortcutsActive && tabBar.modeAt(6) !== ""; onActivated: full.selectTabIndex(6) }
 
     // feed the theme singleton: system palette + mode
     Binding { target: T.QN; property: "followSystem"; value: Plasmoid.configuration.followSystemTheme }
@@ -121,17 +275,52 @@ Item {
         RowLayout {
             Layout.fillWidth: true
             spacing: Kirigami.Units.smallSpacing
+
+            QQC2.ToolButton {
+                icon.name: "application-menu"
+                flat: true
+                onClicked: dataMenu.open()
+                QQC2.ToolTip.text: i18n("Data")
+                QQC2.ToolTip.visible: hovered
+                QQC2.Menu {
+                    id: dataMenu
+                    QQC2.MenuItem { text: i18n("Export to JSON…"); icon.name: "document-export"; enabled: full.hasDoc; onTriggered: exportJsonDialog.open() }
+                    QQC2.MenuItem { text: i18n("Export notes to Markdown…"); icon.name: "text-markdown"; enabled: full.hasDoc; onTriggered: exportMdDialog.open() }
+                    QQC2.MenuItem { text: i18n("Import (merge)…"); icon.name: "document-import"; enabled: full.hasDoc; onTriggered: { full.importMode = "merge"; importDialog.open(); } }
+                    QQC2.MenuItem { text: i18n("Import (replace all)…"); icon.name: "document-import"; enabled: full.hasDoc; onTriggered: { full.importMode = "replace"; importDialog.open(); } }
+                    QQC2.MenuSeparator {}
+                    QQC2.MenuItem { text: i18n("Back up now"); icon.name: "document-save"; enabled: full.hasDoc; onTriggered: full.controller.backupNow() }
+                    QQC2.MenuItem { text: i18n("Clean up attachments"); icon.name: "edit-clear-history"; enabled: full.hasDoc; onTriggered: full.controller.runGc() }
+                    QQC2.MenuItem { text: i18n("Open data folder"); icon.name: "folder-open"; onTriggered: Qt.openUrlExternally("file://" + full.controller.dataDir) }
+                }
+            }
             Kirigami.Icon {
-                source: "com.conqrex.quicknotes"
+                source: "com.conqrex.memokeel"
                 fallback: "view-pim-notes"
                 Layout.preferredWidth: Kirigami.Units.iconSizes.medium
                 Layout.preferredHeight: Kirigami.Units.iconSizes.medium
             }
-            Kirigami.Heading { level: 3; text: i18n("Quick Notes"); color: T.QN.text }
-            Item { Layout.fillWidth: true }
+            Kirigami.Heading { level: 3; text: i18n("MemoKeel"); color: T.QN.text }
 
+            // A live query with no field on screen: the chip is the query's
+            // only visible representation, and removing it is the only way
+            // back to unfiltered content without re-opening the bar. Clicking
+            // it opens the bar instead, so the text can be edited rather than
+            // retyped. Same shape and placement as the tag chip below, because
+            // it is the same idea: "a filter is on, here it is, drop it here."
+            QueryChip {
+                objectName: "queryChip"
+                visible: full.queryChipVisible
+                query: full.searchText
+                onClicked: full.showSearch()
+                onRemoveClicked: full.clearSearch()
+            }
+
+            // The active tag filter belongs beside the title, not out with the
+            // badges — so the spacer comes after it.
             QN.TagChip {
-                visible: full.tagFilter !== "" && full.doc && full.doc.tags[full.tagFilter]
+                objectName: "tagChip"
+                visible: full.tagChipVisible
                 tagName: full.tagName(full.tagFilter)
                 tagColor: (full.doc && full.doc.tags[full.tagFilter])
                           ? Theme.accentFor(full.doc.tags[full.tagFilter].color, full.accent) : full.accent
@@ -141,45 +330,128 @@ Item {
                 onClicked: full.tagFilter = ""
             }
 
+            Item { Layout.fillWidth: true }
+
+            // overdue reminders — jumps to the Reminders tab
             QQC2.ToolButton {
-                icon.name: "user-trash"
+                icon.name: "appointment-reminder"
                 flat: true
-                visible: full.doc && full.doc.trash.length > 0
-                onClicked: full.showTrash = true
-                QQC2.ToolTip.text: i18n("Trash (%1)", full.doc ? full.doc.trash.length : 0)
+                visible: (controller ? controller.overdueCount : 0) > 0
+                onClicked: full.selectMode("reminders")
+                QQC2.ToolTip.text: i18np("%1 reminder due", "%1 reminders due",
+                                         controller ? controller.overdueCount : 0)
                 QQC2.ToolTip.visible: hovered
+                CountBadge {
+                    count: controller ? controller.overdueCount : 0
+                    bg: Kirigami.Theme.negativeTextColor
+                    fg: "white"
+                }
             }
+            // open to-dos — jumps to the To-Do tab
             QQC2.ToolButton {
-                icon.name: "application-menu"
+                icon.name: "view-pim-tasks"
                 flat: true
-                onClicked: dataMenu.open()
-                QQC2.ToolTip.text: i18n("Data")
+                visible: (controller ? controller.openTodoCount : 0) > 0
+                onClicked: full.selectMode("todo")
+                QQC2.ToolTip.text: i18np("%1 open to-do", "%1 open to-dos",
+                                         controller ? controller.openTodoCount : 0)
                 QQC2.ToolTip.visible: hovered
-                QQC2.Menu {
-                    id: dataMenu
-                    QQC2.MenuItem { text: i18n("Export to JSON…"); icon.name: "document-export"; onTriggered: exportJsonDialog.open() }
-                    QQC2.MenuItem { text: i18n("Export notes to Markdown…"); icon.name: "text-markdown"; onTriggered: exportMdDialog.open() }
-                    QQC2.MenuItem { text: i18n("Import (merge)…"); icon.name: "document-import"; onTriggered: { full.importMode = "merge"; importDialog.open(); } }
-                    QQC2.MenuItem { text: i18n("Import (replace all)…"); icon.name: "document-import"; onTriggered: { full.importMode = "replace"; importDialog.open(); } }
-                    QQC2.MenuSeparator {}
-                    QQC2.MenuItem { text: i18n("Back up now"); icon.name: "document-save"; onTriggered: full.controller.backupNow() }
-                    QQC2.MenuItem { text: i18n("Clean up attachments"); icon.name: "edit-clear-history"; onTriggered: full.controller.runGc() }
-                    QQC2.MenuItem { text: i18n("Open data folder"); icon.name: "folder-open"; onTriggered: Qt.openUrlExternally("file://" + full.controller.dataDir) }
+                CountBadge {
+                    count: controller ? controller.openTodoCount : 0
+                    bg: full.accent
+                    fg: "#0b0f1a"
                 }
             }
             QQC2.ToolButton {
-                icon.name: "configure"
+                id: searchToggle
+                objectName: "searchToggle"
+                icon.name: "search"
                 flat: true
-                onClicked: { var a = Plasmoid.internalAction("configure"); if (a) a.trigger(); }
-                QQC2.ToolTip.text: i18n("Settings")
+                visible: full.filterable
+                // Checkable, like every other toggle in this widget (see
+                // NotesView/TodoView): qqc2-desktop-style only paints a
+                // ToolButton's "on" state when `checkable && checked`, so a
+                // non-checkable button's `checked` is never drawn at all. The
+                // declarative binding below survives actuation, because
+                // QQuickAbstractButton::toggle() writes `checked` from C++ and
+                // a C++ write does not tear down a QML binding.
+                checkable: true
+                checked: full.searchVisible
+                onToggled: {
+                    full.toggleSearch();
+                    // The one case where the state cannot move: on the Search
+                    // tab the bar is pinned, so toggleSearch() only refocuses
+                    // and `searchVisible` never changes — nothing would make
+                    // the binding re-evaluate and un-toggle the button. Restate
+                    // it explicitly so the button can never sit "off" over an
+                    // open bar.
+                    searchToggle.checked = Qt.binding(function () { return full.searchVisible; });
+                }
+                QQC2.ToolTip.text: i18n("Search (Ctrl+F)")
                 QQC2.ToolTip.visible: hovered
+            }
+            QQC2.ToolButton {
+                icon.name: "overflow-menu"
+                flat: true
+                onClicked: moreMenu.open()
+                QQC2.ToolTip.text: i18n("More")
+                QQC2.ToolTip.visible: hovered
+                QQC2.Menu {
+                    id: moreMenu
+                    QQC2.MenuItem {
+                        id: archivedItem
+                        text: i18n("Show archived items")
+                        icon.name: "archive-insert"
+                        // Checkable, because a menu entry needs its check mark —
+                        // so `checked` is held by a Binding rather than an inline
+                        // one, and the handler writes the config, never `checked`.
+                        // The config is the single source both mirrors read.
+                        checkable: true
+                        // Inert on the dashboard, which never shows archived
+                        // items — same reasoning as the footer toggle.
+                        enabled: full.hasDoc && full.currentMode !== "dashboard"
+                        onTriggered: Plasmoid.configuration.showArchived = !Plasmoid.configuration.showArchived
+                        Binding {
+                            target: archivedItem
+                            property: "checked"
+                            value: Plasmoid.configuration.showArchived
+                            restoreMode: Binding.RestoreBindingOrValue
+                        }
+                    }
+                    QQC2.MenuItem {
+                        text: i18n("Trash (%1)", full.doc ? full.doc.trash.length : 0)
+                        icon.name: "user-trash"
+                        enabled: full.hasDoc
+                        onTriggered: full.showTrash = true
+                    }
+                    QQC2.MenuSeparator {}
+                    QQC2.MenuItem {
+                        text: i18n("Settings…")
+                        icon.name: "configure"
+                        onTriggered: { var a = Plasmoid.internalAction("configure"); if (a) a.trigger(); }
+                    }
+                }
             }
         }
 
-        // search ----------------------------------------------------------
+        // tabs --------------------------------------------------------------
+        TabBar {
+            id: tabBar
+            Layout.fillWidth: true
+            currentMode: full.currentMode
+            overdue: controller ? controller.overdueCount : 0
+            openTodos: controller ? controller.openTodoCount : 0
+            accent: full.accent
+            enableKanban: Plasmoid.configuration.enableKanban
+            enableBoard: Plasmoid.configuration.enableBoard
+            onModeSelected: (m) => full.selectMode(m)
+        }
+
+        // search (collapsible) ----------------------------------------------
         SearchBar {
             id: searchBar
             Layout.fillWidth: true
+            visible: full.searchVisible
             onTextChanged: full.searchText = text
         }
 
@@ -187,7 +459,24 @@ Item {
         QuickAddBar {
             id: quickAdd
             Layout.fillWidth: true
-            visible: full.currentMode !== "reminders"
+            // The dashboard carries its own per-pane add rows, and the
+            // reminders mode has ReminderAddRow; a third field above either
+            // would just be one more place the same text could go.
+            visible: full.currentMode !== "reminders" && full.currentMode !== "dashboard"
+            // Without a document every add intent would patch `null`.
+            enabled: full.hasDoc
+            // The hint names the shortcut that focuses *this* field. On Search,
+            // Tags and Board the field adds a note but Ctrl+N would navigate
+            // away to the Notes tab's own field, so those tabs get no hint
+            // rather than a wrong one.
+            hint: {
+                switch (full.currentMode) {
+                case "notes": return i18n("Ctrl+N");
+                case "todo": return i18n("Ctrl+T");
+                case "kanban": return i18n("Ctrl+K");
+                default: return "";
+                }
+            }
             placeholder: {
                 switch (full.currentMode) {
                 case "todo": return i18n("Add a task…  #tag !priority ^due");
@@ -198,46 +487,35 @@ Item {
             onAddRequested: (p) => full.handleAdd(p)
         }
         ReminderAddRow {
+            id: reminderAdd
             Layout.fillWidth: true
             visible: full.currentMode === "reminders"
+            enabled: full.hasDoc
+            hint: i18n("Ctrl+R")
             controller: full.controller
             onAdded: toast.show(i18n("Reminder added"))
         }
 
-        // nav rail + content ----------------------------------------------
-        RowLayout {
+        // content -----------------------------------------------------------
+        Loader {
+            id: content
             Layout.fillWidth: true
             Layout.fillHeight: true
-            spacing: Kirigami.Units.smallSpacing
-
-            NavRail {
-                Layout.fillHeight: true
-                currentMode: full.currentMode
-                overdue: controller ? controller.overdueCount : 0
-                openTodos: controller ? controller.openTodoCount : 0
-                accent: full.accent
-                enableKanban: Plasmoid.configuration.enableKanban
-                enableBoard: Plasmoid.configuration.enableBoard
-                collapsed: Plasmoid.configuration.sidebarCollapsed
-                onModeSelected: (m) => full.currentMode = m
-                onCollapsedChanged: Plasmoid.configuration.sidebarCollapsed = collapsed
-            }
-
-            Loader {
-                id: content
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                active: full.doc !== null && (full.everOpened || full.isDesktop)
-                sourceComponent: {
-                    if (!full.doc) return loadingComp;
-                    switch (full.currentMode) {
-                    case "todo": return todoComp;
-                    case "kanban": return kanbanComp;
-                    case "reminders": return remindersComp;
-                    case "board": return boardComp;
-                    case "search": return searchComp;
-                    default: return notesComp;
-                    }
+            // Gate only on the lazy-instantiation guard: the no-document states
+            // have their own components below, and must actually render.
+            active: full.everOpened || full.isDesktop
+            sourceComponent: {
+                if (full.migrationBlocked) return blockedComp;
+                if (!full.doc) return loadingComp;
+                switch (full.currentMode) {
+                case "todo": return todoComp;
+                case "kanban": return kanbanComp;
+                case "reminders": return remindersComp;
+                case "board": return boardComp;
+                case "search": return searchComp;
+                case "dashboard": return dashboardComp;
+                case "tags": return tagsComp;
+                default: return notesComp;
                 }
             }
         }
@@ -246,8 +524,8 @@ Item {
         RowLayout {
             Layout.fillWidth: true
             spacing: Kirigami.Units.smallSpacing
+
             PlasmaComponents.Label {
-                Layout.fillWidth: true
                 color: T.QN.textFaint
                 font: Kirigami.Theme.smallFont
                 elide: Text.ElideRight
@@ -259,18 +537,179 @@ Item {
                     return bits.join("  ·  ");
                 }
             }
+            QQC2.ToolButton {
+                objectName: "archiveToggle"
+                icon.name: "archive-insert"
+                flat: true
+                // Checkable with a live binding on the config — the pattern
+                // NotesView and TodoView already use for this very setting, and
+                // the only one qqc2-desktop-style actually paints as "on".
+                // The handler writes the config, never `checked`, so this
+                // button and the ⋮ menu entry always read the same value.
+                checkable: true
+                // The dashboard excludes archived items unconditionally (it is
+                // the at-a-glance view of live work), so on that tab this
+                // control would do nothing visible. Disabled beats inert.
+                enabled: full.hasDoc && full.currentMode !== "dashboard"
+                checked: Plasmoid.configuration.showArchived
+                onToggled: Plasmoid.configuration.showArchived = checked
+                QQC2.ToolTip.text: i18n("Show archived items")
+                QQC2.ToolTip.visible: hovered
+            }
+            QQC2.ToolButton {
+                icon.name: "user-trash"
+                flat: true
+                enabled: full.hasDoc && full.doc.trash.length > 0
+                onClicked: full.showTrash = true
+                QQC2.ToolTip.text: i18n("Trash (%1)", full.doc ? full.doc.trash.length : 0)
+                QQC2.ToolTip.visible: hovered
+            }
+
+            Item { Layout.fillWidth: true }
+
             PlasmaComponents.Label {
                 visible: controller && controller.lastSaved !== ""
                 color: T.QN.textFaint
                 font: Kirigami.Theme.smallFont
+                elide: Text.ElideRight
                 text: controller ? i18n("Saved %1", controller.lastSaved) : ""
             }
+            QQC2.ToolButton {
+                icon.name: "folder-open"
+                flat: true
+                onClicked: Qt.openUrlExternally("file://" + full.controller.dataDir)
+                QQC2.ToolTip.text: i18n("Open data folder")
+                QQC2.ToolTip.visible: hovered
+            }
+        }
+    }
+
+    // A small count bubble pinned to the top-right of a header button — the
+    // same shape the nav rail used on its Reminders and To-Do entries.
+    component CountBadge: Rectangle {
+        property int count: 0
+        property color bg: Kirigami.Theme.negativeTextColor
+        property color fg: "white"
+
+        visible: count > 0
+        anchors.right: parent.right
+        anchors.top: parent.top
+        anchors.margins: Kirigami.Units.smallSpacing * 0.5
+        width: Kirigami.Units.gridUnit * 0.8
+        height: width
+        radius: width / 2
+        color: bg
+        Text {
+            anchors.centerIn: parent
+            text: parent.count > 9 ? i18n("9+") : parent.count
+            color: parent.fg
+            font.pixelSize: parent.height * 0.6
+            font.bold: true
+        }
+    }
+
+    // A removable pill announcing the live search query, drawn in the header
+    // exactly where the tag-filter chip sits. Same geometry, same removal
+    // gesture; it carries the search icon and the quoted text instead of a tag
+    // dot, and takes the accent rather than a tag colour. No new colours: the
+    // surface is an alpha of the accent, the text a T.QN token.
+    component QueryChip: Rectangle {
+        id: chip
+        property string query: ""
+        signal clicked()
+        signal removeClicked()
+
+        implicitHeight: Kirigami.Units.gridUnit * 1.15
+        implicitWidth: chipRow.implicitWidth + Kirigami.Units.smallSpacing * 2
+        Layout.maximumWidth: Kirigami.Units.gridUnit * 10
+        radius: height / 2
+        color: T.QN.alpha(full.accent, 0.18)
+        border.width: 1
+        border.color: T.QN.alpha(full.accent, 0.6)
+
+        RowLayout {
+            id: chipRow
+            anchors.fill: parent
+            anchors.leftMargin: Kirigami.Units.smallSpacing
+            anchors.rightMargin: Kirigami.Units.smallSpacing
+            spacing: Kirigami.Units.smallSpacing * 0.7
+
+            Kirigami.Icon {
+                source: "search"
+                color: full.accent
+                Layout.preferredWidth: Kirigami.Units.iconSizes.small * 0.8
+                Layout.preferredHeight: Kirigami.Units.iconSizes.small * 0.8
+            }
+            PlasmaComponents.Label {
+                Layout.fillWidth: true
+                text: i18nc("@label the active search query, shown as a removable chip", "“%1”", chip.query)
+                elide: Text.ElideRight
+                font: Kirigami.Theme.smallFont
+                color: T.QN.text
+            }
+            PlasmaComponents.Label {
+                text: "✕"
+                color: T.QN.textDim
+                font: Kirigami.Theme.smallFont
+                MouseArea {
+                    anchors.fill: parent
+                    anchors.margins: -3
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: chip.removeClicked()
+                }
+            }
+        }
+
+        QQC2.ToolTip.text: i18n("Searching for “%1” — click to edit, ✕ to clear", chip.query)
+        QQC2.ToolTip.visible: chipHover.hovered
+        HoverHandler { id: chipHover; cursorShape: Qt.PointingHandCursor }
+        MouseArea {
+            anchors.fill: parent
+            acceptedButtons: Qt.LeftButton
+            onClicked: chip.clicked()
+            z: -1
         }
     }
 
     // ---- content components -------------------------------------------------
     Component { id: loadingComp
-        QN.EmptyState { anchors.centerIn: parent; icon: "view-refresh"; title: i18n("Loading…") }
+        QN.EmptyState {
+            anchors.centerIn: parent
+            width: parent ? parent.width : 0
+            icon: "view-refresh"
+            title: i18n("Loading…")
+            hint: i18n("Reading your notes from disk.")
+        }
+    }
+    // Persistent explanation while a legacy import is stuck: there is no
+    // document to show and none may be invented. The wording is the
+    // controller's, so this and the startup toast can never drift apart.
+    Component { id: blockedComp
+        QN.EmptyState {
+            anchors.centerIn: parent
+            width: parent ? parent.width : 0
+            icon: "dialog-warning"
+            title: i18n("Your notes could not be imported yet")
+            hint: full.controller ? full.controller.migrationBlockedMessage : ""
+        }
+    }
+    Component { id: dashboardComp
+        DashboardView {
+            controller: full.controller; nowMs: full.nowMs; use24h: full.use24h; accent: full.accent
+            defaultNoteColor: Plasmoid.configuration.defaultNoteColor
+            onModeRequested: (m) => full.selectMode(m)
+            onOpenRequested: (id) => full.openNote(id)
+            onTagFilterRequested: (t, m) => { full.tagFilter = t; full.selectMode(m); }
+        }
+    }
+    Component { id: tagsComp
+        TagsView {
+            controller: full.controller; accent: full.accent
+            // A chip in the cloud is a filter, not a mode of its own: set the
+            // global tag filter and hand the user to Search, which is the tab
+            // that lists items across every collection.
+            onTagActivated: (t) => { full.tagFilter = t; full.selectMode("search"); }
+        }
     }
     Component { id: notesComp
         NotesView {
@@ -306,9 +745,9 @@ Item {
     Component { id: searchComp
         SearchView {
             controller: full.controller; nowMs: full.nowMs; use24h: full.use24h; accent: full.accent
-            query: full.searchText
+            query: full.searchText; tagFilter: full.tagFilter
             onOpenRequested: (id) => full.openNote(id)
-            onTagActivated: (t) => full.tagFilter = t
+            onTagActivated: (t) => full.tagFilter = (full.tagFilter === t ? "" : t)
             onModeRequested: (m) => full.currentMode = m
         }
     }
@@ -383,7 +822,7 @@ Item {
         id: exportJsonDialog
         fileMode: Platform.FileDialog.SaveFile
         nameFilters: [i18n("JSON backup (*.json)")]
-        currentFile: "file://quicknotes-backup.json"
+        currentFile: "file://memokeel-backup.json"
         onAccepted: if (full.controller) full.controller.exportJson(("" + file).replace(/^file:\/\//, ""))
     }
     Platform.FolderDialog {
