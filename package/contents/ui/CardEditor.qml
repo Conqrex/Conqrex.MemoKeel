@@ -60,7 +60,12 @@ Rectangle {
 
     QN.DateTimePopup {
         id: cardDue
+        // Cards have no repeat field in the schema, so the repeat control is
+        // hidden rather than shown and silently ignored.
+        showRepeat: false
+        hasValue: !!(ed.cardData && ed.cardData.dueAt)
         onPicked: (when, repeat) => ed.controller.setDue("cards", ed.cardId, when.toISOString())
+        onCleared: ed.controller.setDue("cards", ed.cardId, null)
     }
 
     // swallow clicks so they don't reach the dimmer behind the sheet
@@ -82,7 +87,17 @@ Rectangle {
             id: titleField
             Layout.fillWidth: true
             placeholderText: i18n("Title")
+            selectByMouse: true
+            hoverEnabled: true
+            background: Rectangle {
+                color: T.QN.inputBg
+                radius: T.QN.radiusS
+                border.width: 1
+                border.color: titleField.activeFocus ? T.QN.alpha(Kirigami.Theme.highlightColor, 0.6)
+                            : titleField.hovered ? T.QN.borderHi : T.QN.border
+            }
             color: T.QN.text
+            placeholderTextColor: T.QN.textFaint
             onTextChanged: ed.markDirty()
         }
 
@@ -92,7 +107,17 @@ Rectangle {
             Layout.fillHeight: true
             placeholderText: i18n("Description")
             wrapMode: TextEdit.Wrap
+            selectByMouse: true
+            hoverEnabled: true
+            background: Rectangle {
+                color: T.QN.inputBg
+                radius: T.QN.radiusS
+                border.width: 1
+                border.color: bodyArea.activeFocus ? T.QN.alpha(Kirigami.Theme.highlightColor, 0.6)
+                            : bodyArea.hovered ? T.QN.borderHi : T.QN.border
+            }
             color: T.QN.text
+            placeholderTextColor: T.QN.textFaint
             onTextChanged: ed.markDirty()
         }
 

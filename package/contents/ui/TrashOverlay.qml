@@ -4,6 +4,7 @@ import QtQuick.Controls as QQC2
 import org.kde.plasma.components as PlasmaComponents
 import org.kde.kirigami as Kirigami
 import "components" as QN
+import "theme" as T
 import "../code/format.js" as Fmt
 
 // Recoverable trash: list deleted items, restore individually or empty the lot.
@@ -34,7 +35,7 @@ Rectangle {
             RowLayout {
                 Layout.fillWidth: true
                 Kirigami.Icon { source: "user-trash"; Layout.preferredWidth: Kirigami.Units.iconSizes.medium; Layout.preferredHeight: Kirigami.Units.iconSizes.medium }
-                Kirigami.Heading { level: 4; text: i18n("Trash"); Layout.fillWidth: true }
+                Kirigami.Heading { level: 4; text: i18n("Trash"); Layout.fillWidth: true; color: T.QN.text }
                 QQC2.ToolButton {
                     icon.name: "trash-empty"; text: i18n("Empty"); display: QQC2.AbstractButton.TextBesideIcon
                     flat: true; font: Kirigami.Theme.smallFont
@@ -61,7 +62,7 @@ Rectangle {
                     width: ListView.view.width
                     height: row.implicitHeight + Kirigami.Units.smallSpacing
                     radius: Kirigami.Units.smallSpacing
-                    color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.06)
+                    color: T.QN.alpha(T.QN.text, 0.06)
                     RowLayout {
                         id: row
                         anchors.fill: parent
@@ -77,10 +78,11 @@ Rectangle {
                             Layout.fillWidth: true
                             text: modelData.item.title || modelData.item.text || i18n("(untitled %1)", modelData.item.type)
                             elide: Text.ElideRight
+                            color: T.QN.text
                         }
                         PlasmaComponents.Label {
                             text: Fmt.dateTimeShort(modelData.deletedAt, true)
-                            opacity: 0.5; font: Kirigami.Theme.smallFont
+                            color: T.QN.textFaint; font: Kirigami.Theme.smallFont
                         }
                         QQC2.ToolButton {
                             icon.name: "edit-undo"; flat: true

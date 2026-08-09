@@ -25,12 +25,14 @@ RowLayout {
         Layout.fillWidth: true
         placeholderText: i18n("Search notes, to-dos, tags…")
         selectByMouse: true
+        hoverEnabled: true
         Keys.onEscapePressed: field.text = ""
         background: Rectangle {
             color: T.QN.inputBg
             radius: T.QN.radiusS
             border.width: 1
-            border.color: field.activeFocus ? T.QN.alpha(Kirigami.Theme.highlightColor, 0.6) : T.QN.border
+            border.color: field.activeFocus ? T.QN.alpha(Kirigami.Theme.highlightColor, 0.6)
+                        : field.hovered ? T.QN.borderHi : T.QN.border
         }
         color: T.QN.text
         placeholderTextColor: T.QN.textFaint

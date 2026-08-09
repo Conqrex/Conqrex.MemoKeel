@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
+import "../theme" as T
 import "../../code/theme.js" as Theme
 
 // A row of neon swatches. Emits picked(key) where key is a palette key or "" for
@@ -28,7 +29,7 @@ Flow {
             color: isDefault ? Qt.rgba(swatch.r, swatch.g, swatch.b, 0.18) : swatch
             border.width: picker.selected === modelData ? 2 : 1
             border.color: picker.selected === modelData
-                ? Kirigami.Theme.textColor
+                ? T.QN.text
                 : Qt.rgba(swatch.r, swatch.g, swatch.b, 0.6)
 
             // a small glyph on the default swatch
@@ -36,8 +37,7 @@ Flow {
                 anchors.centerIn: parent
                 visible: parent.isDefault
                 text: "—"
-                color: Kirigami.Theme.textColor
-                opacity: 0.7
+                color: T.QN.textDim
             }
 
             MouseArea {

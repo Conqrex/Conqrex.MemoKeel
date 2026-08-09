@@ -4,6 +4,7 @@ import QtQuick.Controls as QQC2
 import Qt.labs.platform as Platform
 import org.kde.plasma.components as PlasmaComponents
 import org.kde.kirigami as Kirigami
+import "../theme" as T
 
 // A thumbnail row for an item's attachments, with add-via-picker and drag-drop.
 // Image blobs render as thumbnails; everything else shows a file glyph + ext.
@@ -32,7 +33,7 @@ ColumnLayout {
         Layout.fillWidth: true
         spacing: Kirigami.Units.smallSpacing
         Kirigami.Icon { source: "mail-attachment"; Layout.preferredWidth: Kirigami.Units.iconSizes.small; Layout.preferredHeight: Kirigami.Units.iconSizes.small; opacity: 0.7 }
-        PlasmaComponents.Label { text: i18n("Attachments"); font: Kirigami.Theme.smallFont; opacity: 0.7 }
+        PlasmaComponents.Label { text: i18n("Attachments"); font: Kirigami.Theme.smallFont; color: T.QN.textDim }
         Item { Layout.fillWidth: true }
         QQC2.ToolButton {
             icon.name: "list-add"
@@ -88,6 +89,7 @@ ColumnLayout {
                         Layout.alignment: Qt.AlignHCenter
                         text: thumb.meta ? ("." + (thumb.meta.ext || "?")) : ""
                         font: Kirigami.Theme.smallFont
+                        color: T.QN.textDim
                     }
                 }
 

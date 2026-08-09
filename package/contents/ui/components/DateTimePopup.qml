@@ -12,7 +12,13 @@ QQC2.Popup {
     property date shown: new Date()      // month being displayed
     property date sel: new Date()        // selected day
     property string repeat: "none"
+    // Cards have no repeat field in the schema, so the CardEditor turns this off
+    // rather than offer a control whose value would be silently discarded.
+    property bool showRepeat: true
+    // Only offer Clear when the caller actually has a value to clear.
+    property bool hasValue: false
     signal picked(date when, string repeat)
+    signal cleared()
 
     readonly property var repeatKeys: ["none", "daily", "weekly", "monthly"]
     // The window-wide overlay: used both to centre the popup and to clamp it
@@ -133,9 +139,13 @@ QQC2.Popup {
             }
 
             // repeat — its own row so the popup stays narrow enough for the
-            // widget's minimum width
+            // widget's minimum width. Hiding it is enough to remove it from the
+            // ColumnLayout completely — Qt Quick Layouts skip invisible items
+            // and their spacing — so no gap is left behind and col.implicitHeight
+            // (which the popup's height clamp is derived from) shrinks with it.
             RowLayout {
                 Layout.fillWidth: true
+                visible: pop.showRepeat
                 spacing: Kirigami.Units.smallSpacing
                 QQC2.ComboBox {
                     id: repBox
@@ -157,6 +167,12 @@ QQC2.Popup {
 
             RowLayout {
                 Layout.fillWidth: true
+                QQC2.Button {
+                    text: i18n("Clear")
+                    visible: pop.hasValue
+                    icon.name: "edit-clear"
+                    onClicked: { pop.cleared(); pop.close(); }
+                }
                 Item { Layout.fillWidth: true }
                 QQC2.Button { text: i18n("Cancel"); onClicked: pop.close() }
                 QQC2.Button {

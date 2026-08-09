@@ -4,6 +4,7 @@ import QtQuick.Controls as QQC2
 import org.kde.plasma.components as PlasmaComponents
 import org.kde.kirigami as Kirigami
 import "components" as QN
+import "theme" as T
 import "../code/theme.js" as Theme
 import "../code/markdown.js" as Md
 
@@ -55,7 +56,7 @@ QN.NeonCard {
                 Layout.fillWidth: true
                 text: card.note.title !== "" ? card.note.title : i18n("Untitled")
                 font.bold: true
-                opacity: card.note.title !== "" ? 1 : 0.5
+                color: card.note.title !== "" ? T.QN.text : T.QN.textFaint
                 elide: Text.ElideRight
             }
             // hover toolbar
@@ -106,7 +107,7 @@ QN.NeonCard {
             wrapMode: Text.WordWrap
             maximumLineCount: 3
             elide: Text.ElideRight
-            opacity: 0.75
+            color: T.QN.textDim
             font: Kirigami.Theme.smallFont
         }
 
@@ -121,15 +122,15 @@ QN.NeonCard {
                 Kirigami.Icon { source: "checkbox"; Layout.preferredWidth: Kirigami.Units.iconSizes.small; Layout.preferredHeight: Kirigami.Units.iconSizes.small; opacity: 0.7 }
                 PlasmaComponents.Label {
                     text: card.progress.done + "/" + card.progress.total
-                    font: Kirigami.Theme.smallFont; opacity: 0.7
-                    color: card.progress.done === card.progress.total ? Theme.PALETTE.lime : Kirigami.Theme.textColor
+                    font: Kirigami.Theme.smallFont
+                    color: card.progress.done === card.progress.total ? Theme.PALETTE.lime : T.QN.textDim
                 }
             }
             RowLayout {
                 visible: card.note.attachmentIds && card.note.attachmentIds.length > 0
                 spacing: 3
                 Kirigami.Icon { source: "mail-attachment"; Layout.preferredWidth: Kirigami.Units.iconSizes.small; Layout.preferredHeight: Kirigami.Units.iconSizes.small; opacity: 0.7 }
-                PlasmaComponents.Label { text: card.note.attachmentIds.length; font: Kirigami.Theme.smallFont; opacity: 0.7 }
+                PlasmaComponents.Label { text: card.note.attachmentIds.length; font: Kirigami.Theme.smallFont; color: T.QN.textDim }
             }
             Item { Layout.fillWidth: true }
         }

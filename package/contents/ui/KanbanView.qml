@@ -177,6 +177,7 @@ Item {
                                 background: null
                                 font.bold: true
                                 color: T.QN.text
+                                placeholderTextColor: T.QN.textFaint
                                 onEditingFinished: if (text !== col.modelData.title) kroot.controller.updateItem("columns", col.colId, { title: text })
                             }
                             PlasmaComponents.Label {
@@ -252,12 +253,20 @@ Item {
                             // another coordinate space and must never be read here.
                             function insertIndexAt(colY, excludeId) {
                                 var y = colY - col.listTop + cardList.contentY;
-                                var n = 0;
+                                var n = 0, sawItem = false, below = false;
                                 for (var i = 0; i < cardList.count; i++) {
                                     var c = col.cards[i];
                                     if (excludeId && c && c.id === excludeId) continue;
-                                    var it = cardList.itemAtIndex(i);
-                                    if (it && y < it.y + it.height / 2) return n;
+                                    var it = below ? null : cardList.itemAtIndex(i);
+                                    // A null delegate *after* a realised one means the walk has
+                                    // run off the bottom of the viewport: everything left is
+                                    // below the drop point, so keep counting to the end instead
+                                    // of treating uncreated rows as being above it. (Qt keeps the
+                                    // delegate straddling the viewport edge alive, so today this
+                                    // never fires — but it would mis-drop silently the moment
+                                    // cacheBuffer or reuseItems were added to this ListView.)
+                                    if (!it && sawItem) below = true;
+                                    else if (it) { sawItem = true; if (y < it.y + it.height / 2) return n; }
                                     n++;
                                 }
                                 return n;
@@ -296,10 +305,21 @@ Item {
 
                         // per-column quick add
                         QQC2.TextField {
+                            id: addField
                             Layout.fillWidth: true
                             placeholderText: i18n("+ card")
                             font: Kirigami.Theme.smallFont
+                            selectByMouse: true
+                            hoverEnabled: true
+                            background: Rectangle {
+                                color: T.QN.inputBg
+                                radius: T.QN.radiusS
+                                border.width: 1
+                                border.color: addField.activeFocus ? T.QN.alpha(Kirigami.Theme.highlightColor, 0.6)
+                                            : addField.hovered ? T.QN.borderHi : T.QN.border
+                            }
                             color: T.QN.text
+                            placeholderTextColor: T.QN.textFaint
                             onAccepted: { if (text.trim() !== "") { kroot.controller.addCard(col.colId, { title: text.trim() }); text = ""; } }
                         }
                     }

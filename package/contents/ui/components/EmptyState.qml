@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import org.kde.plasma.components as PlasmaComponents
 import org.kde.kirigami as Kirigami
+import "../theme" as T
 
 // A centered placeholder for an empty mode.
 ColumnLayout {
@@ -25,7 +26,7 @@ ColumnLayout {
         horizontalAlignment: Text.AlignHCenter
         text: empty.title
         font.bold: true
-        opacity: 0.8
+        color: T.QN.text
         wrapMode: Text.WordWrap
     }
     PlasmaComponents.Label {
@@ -35,7 +36,7 @@ ColumnLayout {
         visible: empty.hint !== ""
         horizontalAlignment: Text.AlignHCenter
         text: empty.hint
-        opacity: 0.55
+        color: T.QN.textDim
         font: Kirigami.Theme.smallFont
         wrapMode: Text.WordWrap
     }

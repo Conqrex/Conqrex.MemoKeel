@@ -94,8 +94,7 @@ Rectangle {
                         Kirigami.Icon {
                             anchors.fill: parent
                             source: item.modelData.icon
-                            color: item.active ? rail.accent : Kirigami.Theme.textColor
-                            opacity: item.active ? 1 : 0.8
+                            color: item.active ? rail.accent : T.QN.textDim
                         }
                         // overdue badge on the reminders entry
                         Rectangle {
