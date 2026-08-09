@@ -29,7 +29,7 @@ KCM.SimpleKCM {
 
     // combo-backed string entries
     property string cfg_accent: "cyan"
-    property string cfg_defaultMode: "notes"
+    property string cfg_defaultMode: "dashboard"
     property string cfg_sortBy: "updated"
     property string cfg_notifyUrgency: "normal"
     property string cfg_defaultNoteColor: ""
@@ -88,11 +88,14 @@ KCM.SimpleKCM {
             Kirigami.FormData.label: i18n("Start on:")
             textRole: "label"; valueRole: "key"
             model: [
+                { key: "dashboard", label: i18n("Dashboard") },
                 { key: "notes", label: i18n("Notes") },
                 { key: "todo", label: i18n("To-Do") },
                 { key: "kanban", label: i18n("Kanban") },
                 { key: "reminders", label: i18n("Reminders") },
-                { key: "search", label: i18n("Search") }
+                { key: "board", label: i18n("Board") },
+                { key: "search", label: i18n("Search") },
+                { key: "tags", label: i18n("Tags") }
             ]
             currentIndex: Math.max(0, indexOfValue(page.cfg_defaultMode))
             onActivated: page.cfg_defaultMode = currentValue

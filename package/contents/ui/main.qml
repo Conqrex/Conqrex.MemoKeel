@@ -145,6 +145,12 @@ PlasmoidItem {
     // true while store.sh reports that a legacy import was due but did not
     // succeed: there is no document to show and none must be invented
     property bool _migrationBlocked: false
+    // Public mirror of the blocked state plus the single copy of the wording
+    // for it. FullView both toasts this once and, because there is nothing to
+    // render underneath, keeps it on screen as the content placeholder — so
+    // the sentence is written here once and read from there, never duplicated.
+    readonly property bool migrationBlocked: _migrationBlocked
+    property string migrationBlockedMessage: ""
     function load() { exec.exec(storeCmd("init", true), { kind: "load" }); }
 
     // A blocked migration is transient (a lock held by another instance, a
@@ -167,15 +173,17 @@ PlasmoidItem {
         // and let the retry timer try again.
         if (d && d.migrationFailed === true) {
             root._migrationBlocked = true;
+            root.migrationBlockedMessage = i18n(
+                "Could not import your notes from %1 yet — nothing there was changed or deleted. MemoKeel will keep retrying.",
+                ("" + (d.migrateFrom || "")));
             if (!root._migrationFailureAnnounced) {
                 root._migrationFailureAnnounced = true;
-                root.postStatus(i18n(
-                    "Could not import your notes from %1 yet — nothing there was changed or deleted. MemoKeel will keep retrying.",
-                    ("" + (d.migrateFrom || ""))));
+                root.postStatus(root.migrationBlockedMessage);
             }
             return;
         }
         root._migrationBlocked = false;
+        root.migrationBlockedMessage = "";
 
         if (!d || code !== 0) { d = Schema.defaultDoc(); }
 

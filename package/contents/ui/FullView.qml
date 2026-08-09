@@ -10,20 +10,28 @@ import "components" as QN
 import "theme" as T
 import "../code/theme.js" as Theme
 
-// The popup shell: header, global search + quick-add, a left nav rail and a
-// content loader that swaps the active mode. Overlays host the note editor and
-// the trash. All data flows through `controller` (main.qml).
+// The popup shell: header, a top tab strip, an optional search bar, the add
+// bar and a full-width content loader that swaps the active mode. Overlays
+// host the note editor, the card editor and the trash. All data flows through
+// `controller` (main.qml).
 Item {
     id: full
 
     property var controller
     readonly property var doc: controller ? controller.doc : null
+    // A blocked legacy import leaves the controller with no document on
+    // purpose; everything that would act on one has to stand down.
+    readonly property bool migrationBlocked: !!controller && controller.migrationBlocked
+    readonly property bool hasDoc: full.doc !== null
     readonly property double nowMs: controller ? controller.nowMs : 0
     readonly property bool use24h: controller ? controller.use24h : true
     readonly property color accent: Theme.accentFor(controller ? controller.accentKey : "cyan",
                                                      Kirigami.Theme.highlightColor)
 
-    property string currentMode: "notes"
+    property string currentMode: "dashboard"
+    // The search *bar* is a collapsible filter over every mode; the Search
+    // *tab* is a mode of its own and works whether or not the bar is showing.
+    property bool searchVisible: false
     property string searchText: ""
     property string tagFilter: ""
     property string editingNoteId: ""
@@ -55,7 +63,7 @@ Item {
     readonly property bool canToast: full.everOpened || full.isDesktop
 
     Component.onCompleted: {
-        if (controller) full.currentMode = Plasmoid.configuration.lastMode || "notes";
+        if (controller) full.currentMode = Plasmoid.configuration.lastMode || "dashboard";
         if (popupOpen) full.everOpened = true;
         full.drainPendingStatus();
     }
@@ -94,7 +102,8 @@ Item {
 
     // route the quick-add bar to the active mode
     function handleAdd(p) {
-        if (!controller) return;
+        // No document means every intent below would patch `null`.
+        if (!controller || !full.hasDoc) return;
         if ((!p.text || p.text === "") && p.tagNames.length === 0) return;
         var id = "", coll = "notes";
         switch (full.currentMode) {
@@ -113,6 +122,69 @@ Item {
         }
         if (id && p.tagNames.length) controller.applyTagNames(coll, id, p.tagNames);
     }
+
+    // ---- navigation / shortcut helpers --------------------------------------
+    function selectMode(m) { if (m !== "") full.currentMode = m; }
+    // Ctrl+1…7 address tab positions, so resolve them through the tab bar's
+    // model, which has already dropped the modes the user turned off.
+    function selectTabIndex(i) { full.selectMode(tabBar.modeAt(i)); }
+
+    // Switch to a mode and put the caret in the field that adds to it.
+    function focusAdd(mode) {
+        full.selectMode(mode);
+        if (!full.hasDoc) return;
+        if (mode === "reminders") reminderAdd.focusField();
+        else quickAdd.focusField();
+    }
+
+    function showSearch() { full.searchVisible = true; searchBar.focusField(); }
+    function hideSearch() { searchBar.clear(); full.searchVisible = false; }
+    function toggleSearch() { if (full.searchVisible) full.hideSearch(); else full.showSearch(); }
+
+    // Escape unwinds one layer at a time: overlays first, then the search text,
+    // then the search bar itself.
+    function handleEscape() {
+        if (full.showTrash) { full.showTrash = false; return; }
+        if (full.editingCardId !== "") { full.editingCardId = ""; return; }
+        if (full.editingNoteId !== "") { full.editingNoteId = ""; return; }
+        if (full.searchText !== "") { searchBar.clear(); return; }
+        if (full.searchVisible) full.searchVisible = false;
+    }
+
+    // Qt.WindowShortcut keeps these scoped to the window this view lives in.
+    // In a panel that window is the popup, which is only ours while it is
+    // open — hence the extra gate, so a closed widget never eats the desktop's
+    // Ctrl+F. Every binding carries a modifier, so a bare letter typed into a
+    // field is never swallowed: the add fields keep receiving "n", "t", "k".
+    readonly property bool shortcutsActive: full.popupOpen || full.isDesktop
+
+    Shortcut { sequence: "Ctrl+N"; context: Qt.WindowShortcut; enabled: full.shortcutsActive; onActivated: full.focusAdd("notes") }
+    Shortcut { sequence: "Ctrl+T"; context: Qt.WindowShortcut; enabled: full.shortcutsActive; onActivated: full.focusAdd("todo") }
+    Shortcut {
+        sequence: "Ctrl+K"
+        context: Qt.WindowShortcut
+        enabled: full.shortcutsActive && Plasmoid.configuration.enableKanban
+        onActivated: full.focusAdd("kanban")
+    }
+    Shortcut { sequence: "Ctrl+R"; context: Qt.WindowShortcut; enabled: full.shortcutsActive; onActivated: full.focusAdd("reminders") }
+    Shortcut { sequence: "Ctrl+F"; context: Qt.WindowShortcut; enabled: full.shortcutsActive; onActivated: full.toggleSearch() }
+    // Only claim Escape when there is a layer to unwind; otherwise it must keep
+    // falling through to Plasma, which closes the popup with it.
+    Shortcut {
+        sequence: "Escape"
+        context: Qt.WindowShortcut
+        enabled: full.shortcutsActive
+                 && (full.showTrash || full.editingCardId !== "" || full.editingNoteId !== ""
+                     || full.searchText !== "" || full.searchVisible)
+        onActivated: full.handleEscape()
+    }
+    Shortcut { sequence: "Ctrl+1"; context: Qt.WindowShortcut; enabled: full.shortcutsActive && tabBar.modeAt(0) !== ""; onActivated: full.selectTabIndex(0) }
+    Shortcut { sequence: "Ctrl+2"; context: Qt.WindowShortcut; enabled: full.shortcutsActive && tabBar.modeAt(1) !== ""; onActivated: full.selectTabIndex(1) }
+    Shortcut { sequence: "Ctrl+3"; context: Qt.WindowShortcut; enabled: full.shortcutsActive && tabBar.modeAt(2) !== ""; onActivated: full.selectTabIndex(2) }
+    Shortcut { sequence: "Ctrl+4"; context: Qt.WindowShortcut; enabled: full.shortcutsActive && tabBar.modeAt(3) !== ""; onActivated: full.selectTabIndex(3) }
+    Shortcut { sequence: "Ctrl+5"; context: Qt.WindowShortcut; enabled: full.shortcutsActive && tabBar.modeAt(4) !== ""; onActivated: full.selectTabIndex(4) }
+    Shortcut { sequence: "Ctrl+6"; context: Qt.WindowShortcut; enabled: full.shortcutsActive && tabBar.modeAt(5) !== ""; onActivated: full.selectTabIndex(5) }
+    Shortcut { sequence: "Ctrl+7"; context: Qt.WindowShortcut; enabled: full.shortcutsActive && tabBar.modeAt(6) !== ""; onActivated: full.selectTabIndex(6) }
 
     // feed the theme singleton: system palette + mode
     Binding { target: T.QN; property: "followSystem"; value: Plasmoid.configuration.followSystemTheme }
@@ -141,6 +213,25 @@ Item {
         RowLayout {
             Layout.fillWidth: true
             spacing: Kirigami.Units.smallSpacing
+
+            QQC2.ToolButton {
+                icon.name: "application-menu"
+                flat: true
+                onClicked: dataMenu.open()
+                QQC2.ToolTip.text: i18n("Data")
+                QQC2.ToolTip.visible: hovered
+                QQC2.Menu {
+                    id: dataMenu
+                    QQC2.MenuItem { text: i18n("Export to JSON…"); icon.name: "document-export"; enabled: full.hasDoc; onTriggered: exportJsonDialog.open() }
+                    QQC2.MenuItem { text: i18n("Export notes to Markdown…"); icon.name: "text-markdown"; enabled: full.hasDoc; onTriggered: exportMdDialog.open() }
+                    QQC2.MenuItem { text: i18n("Import (merge)…"); icon.name: "document-import"; enabled: full.hasDoc; onTriggered: { full.importMode = "merge"; importDialog.open(); } }
+                    QQC2.MenuItem { text: i18n("Import (replace all)…"); icon.name: "document-import"; enabled: full.hasDoc; onTriggered: { full.importMode = "replace"; importDialog.open(); } }
+                    QQC2.MenuSeparator {}
+                    QQC2.MenuItem { text: i18n("Back up now"); icon.name: "document-save"; enabled: full.hasDoc; onTriggered: full.controller.backupNow() }
+                    QQC2.MenuItem { text: i18n("Clean up attachments"); icon.name: "edit-clear-history"; enabled: full.hasDoc; onTriggered: full.controller.runGc() }
+                    QQC2.MenuItem { text: i18n("Open data folder"); icon.name: "folder-open"; onTriggered: Qt.openUrlExternally("file://" + full.controller.dataDir) }
+                }
+            }
             Kirigami.Icon {
                 source: "com.conqrex.memokeel"
                 fallback: "view-pim-notes"
@@ -161,45 +252,99 @@ Item {
                 onClicked: full.tagFilter = ""
             }
 
+            // overdue reminders — jumps to the Reminders tab
             QQC2.ToolButton {
-                icon.name: "user-trash"
+                icon.name: "appointment-reminder"
                 flat: true
-                visible: full.doc && full.doc.trash.length > 0
-                onClicked: full.showTrash = true
-                QQC2.ToolTip.text: i18n("Trash (%1)", full.doc ? full.doc.trash.length : 0)
+                visible: (controller ? controller.overdueCount : 0) > 0
+                onClicked: full.selectMode("reminders")
+                QQC2.ToolTip.text: i18np("%1 reminder due", "%1 reminders due",
+                                         controller ? controller.overdueCount : 0)
                 QQC2.ToolTip.visible: hovered
+                CountBadge {
+                    count: controller ? controller.overdueCount : 0
+                    bg: Kirigami.Theme.negativeTextColor
+                    fg: "white"
+                }
             }
+            // open to-dos — jumps to the To-Do tab
             QQC2.ToolButton {
-                icon.name: "application-menu"
+                icon.name: "view-pim-tasks"
                 flat: true
-                onClicked: dataMenu.open()
-                QQC2.ToolTip.text: i18n("Data")
+                visible: (controller ? controller.openTodoCount : 0) > 0
+                onClicked: full.selectMode("todo")
+                QQC2.ToolTip.text: i18np("%1 open to-do", "%1 open to-dos",
+                                         controller ? controller.openTodoCount : 0)
                 QQC2.ToolTip.visible: hovered
-                QQC2.Menu {
-                    id: dataMenu
-                    QQC2.MenuItem { text: i18n("Export to JSON…"); icon.name: "document-export"; onTriggered: exportJsonDialog.open() }
-                    QQC2.MenuItem { text: i18n("Export notes to Markdown…"); icon.name: "text-markdown"; onTriggered: exportMdDialog.open() }
-                    QQC2.MenuItem { text: i18n("Import (merge)…"); icon.name: "document-import"; onTriggered: { full.importMode = "merge"; importDialog.open(); } }
-                    QQC2.MenuItem { text: i18n("Import (replace all)…"); icon.name: "document-import"; onTriggered: { full.importMode = "replace"; importDialog.open(); } }
-                    QQC2.MenuSeparator {}
-                    QQC2.MenuItem { text: i18n("Back up now"); icon.name: "document-save"; onTriggered: full.controller.backupNow() }
-                    QQC2.MenuItem { text: i18n("Clean up attachments"); icon.name: "edit-clear-history"; onTriggered: full.controller.runGc() }
-                    QQC2.MenuItem { text: i18n("Open data folder"); icon.name: "folder-open"; onTriggered: Qt.openUrlExternally("file://" + full.controller.dataDir) }
+                CountBadge {
+                    count: controller ? controller.openTodoCount : 0
+                    bg: full.accent
+                    fg: "#0b0f1a"
                 }
             }
             QQC2.ToolButton {
-                icon.name: "configure"
+                icon.name: "search"
                 flat: true
-                onClicked: { var a = Plasmoid.internalAction("configure"); if (a) a.trigger(); }
-                QQC2.ToolTip.text: i18n("Settings")
+                checkable: true
+                checked: full.searchVisible
+                onToggled: checked ? full.showSearch() : full.hideSearch()
+                QQC2.ToolTip.text: i18n("Search (Ctrl+F)")
                 QQC2.ToolTip.visible: hovered
+            }
+            QQC2.ToolButton {
+                icon.name: "overflow-menu"
+                flat: true
+                onClicked: moreMenu.open()
+                QQC2.ToolTip.text: i18n("More")
+                QQC2.ToolTip.visible: hovered
+                QQC2.Menu {
+                    id: moreMenu
+                    QQC2.MenuItem {
+                        text: i18n("Show archived items")
+                        icon.name: "archive-insert"
+                        checkable: true
+                        checked: Plasmoid.configuration.showArchived
+                        enabled: full.hasDoc
+                        onTriggered: Plasmoid.configuration.showArchived = checked
+                    }
+                    QQC2.MenuItem {
+                        text: i18n("Trash (%1)", full.doc ? full.doc.trash.length : 0)
+                        icon.name: "user-trash"
+                        enabled: full.hasDoc
+                        onTriggered: full.showTrash = true
+                    }
+                    QQC2.MenuSeparator {}
+                    QQC2.MenuItem {
+                        text: i18n("Settings…")
+                        icon.name: "configure"
+                        onTriggered: { var a = Plasmoid.internalAction("configure"); if (a) a.trigger(); }
+                    }
+                }
             }
         }
 
-        // search ----------------------------------------------------------
+        // tabs --------------------------------------------------------------
+        TabBar {
+            id: tabBar
+            Layout.fillWidth: true
+            currentMode: full.currentMode
+            overdue: controller ? controller.overdueCount : 0
+            openTodos: controller ? controller.openTodoCount : 0
+            accent: full.accent
+            enableKanban: Plasmoid.configuration.enableKanban
+            enableBoard: Plasmoid.configuration.enableBoard
+            // `expandedWidth` is the strip's own measurement of the width its
+            // labels need in the current font, so labels drop exactly when
+            // they would otherwise start eliding — no hardcoded breakpoint.
+            compact: width < tabBar.expandedWidth
+            onModeSelected: (m) => full.selectMode(m)
+        }
+
+        // search (collapsible) ----------------------------------------------
         SearchBar {
             id: searchBar
             Layout.fillWidth: true
+            visible: full.searchVisible
             onTextChanged: full.searchText = text
         }
 
@@ -208,6 +353,15 @@ Item {
             id: quickAdd
             Layout.fillWidth: true
             visible: full.currentMode !== "reminders"
+            // Without a document every add intent would patch `null`.
+            enabled: full.hasDoc
+            hint: {
+                switch (full.currentMode) {
+                case "todo": return i18n("Ctrl+T");
+                case "kanban": return i18n("Ctrl+K");
+                default: return i18n("Ctrl+N");
+                }
+            }
             placeholder: {
                 switch (full.currentMode) {
                 case "todo": return i18n("Add a task…  #tag !priority ^due");
@@ -218,46 +372,35 @@ Item {
             onAddRequested: (p) => full.handleAdd(p)
         }
         ReminderAddRow {
+            id: reminderAdd
             Layout.fillWidth: true
             visible: full.currentMode === "reminders"
+            enabled: full.hasDoc
+            hint: i18n("Ctrl+R")
             controller: full.controller
             onAdded: toast.show(i18n("Reminder added"))
         }
 
-        // nav rail + content ----------------------------------------------
-        RowLayout {
+        // content -----------------------------------------------------------
+        Loader {
+            id: content
             Layout.fillWidth: true
             Layout.fillHeight: true
-            spacing: Kirigami.Units.smallSpacing
-
-            NavRail {
-                Layout.fillHeight: true
-                currentMode: full.currentMode
-                overdue: controller ? controller.overdueCount : 0
-                openTodos: controller ? controller.openTodoCount : 0
-                accent: full.accent
-                enableKanban: Plasmoid.configuration.enableKanban
-                enableBoard: Plasmoid.configuration.enableBoard
-                collapsed: Plasmoid.configuration.sidebarCollapsed
-                onModeSelected: (m) => full.currentMode = m
-                onCollapsedChanged: Plasmoid.configuration.sidebarCollapsed = collapsed
-            }
-
-            Loader {
-                id: content
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                active: full.doc !== null && (full.everOpened || full.isDesktop)
-                sourceComponent: {
-                    if (!full.doc) return loadingComp;
-                    switch (full.currentMode) {
-                    case "todo": return todoComp;
-                    case "kanban": return kanbanComp;
-                    case "reminders": return remindersComp;
-                    case "board": return boardComp;
-                    case "search": return searchComp;
-                    default: return notesComp;
-                    }
+            // Gate only on the lazy-instantiation guard: the no-document states
+            // have their own components below, and must actually render.
+            active: full.everOpened || full.isDesktop
+            sourceComponent: {
+                if (full.migrationBlocked) return blockedComp;
+                if (!full.doc) return loadingComp;
+                switch (full.currentMode) {
+                case "todo": return todoComp;
+                case "kanban": return kanbanComp;
+                case "reminders": return remindersComp;
+                case "board": return boardComp;
+                case "search": return searchComp;
+                case "dashboard": return dashboardComp;
+                case "tags": return tagsComp;
+                default: return notesComp;
                 }
             }
         }
@@ -266,8 +409,8 @@ Item {
         RowLayout {
             Layout.fillWidth: true
             spacing: Kirigami.Units.smallSpacing
+
             PlasmaComponents.Label {
-                Layout.fillWidth: true
                 color: T.QN.textFaint
                 font: Kirigami.Theme.smallFont
                 elide: Text.ElideRight
@@ -279,18 +422,110 @@ Item {
                     return bits.join("  ·  ");
                 }
             }
+            QQC2.ToolButton {
+                icon.name: "archive-insert"
+                flat: true
+                checkable: true
+                enabled: full.hasDoc
+                checked: Plasmoid.configuration.showArchived
+                onToggled: Plasmoid.configuration.showArchived = checked
+                QQC2.ToolTip.text: i18n("Show archived items")
+                QQC2.ToolTip.visible: hovered
+            }
+            QQC2.ToolButton {
+                icon.name: "user-trash"
+                flat: true
+                enabled: full.hasDoc && full.doc.trash.length > 0
+                onClicked: full.showTrash = true
+                QQC2.ToolTip.text: i18n("Trash (%1)", full.doc ? full.doc.trash.length : 0)
+                QQC2.ToolTip.visible: hovered
+            }
+
+            Item { Layout.fillWidth: true }
+
             PlasmaComponents.Label {
                 visible: controller && controller.lastSaved !== ""
                 color: T.QN.textFaint
                 font: Kirigami.Theme.smallFont
+                elide: Text.ElideRight
                 text: controller ? i18n("Saved %1", controller.lastSaved) : ""
             }
+            QQC2.ToolButton {
+                icon.name: "folder-open"
+                flat: true
+                onClicked: Qt.openUrlExternally("file://" + full.controller.dataDir)
+                QQC2.ToolTip.text: i18n("Open data folder")
+                QQC2.ToolTip.visible: hovered
+            }
+        }
+    }
+
+    // A small count bubble pinned to the top-right of a header button — the
+    // same shape the nav rail used on its Reminders and To-Do entries.
+    component CountBadge: Rectangle {
+        property int count: 0
+        property color bg: Kirigami.Theme.negativeTextColor
+        property color fg: "white"
+
+        visible: count > 0
+        anchors.right: parent.right
+        anchors.top: parent.top
+        anchors.margins: Kirigami.Units.smallSpacing * 0.5
+        width: Kirigami.Units.gridUnit * 0.8
+        height: width
+        radius: width / 2
+        color: bg
+        Text {
+            anchors.centerIn: parent
+            text: parent.count > 9 ? i18n("9+") : parent.count
+            color: parent.fg
+            font.pixelSize: parent.height * 0.6
+            font.bold: true
         }
     }
 
     // ---- content components -------------------------------------------------
     Component { id: loadingComp
-        QN.EmptyState { anchors.centerIn: parent; icon: "view-refresh"; title: i18n("Loading…") }
+        QN.EmptyState {
+            anchors.centerIn: parent
+            width: parent ? parent.width : 0
+            icon: "view-refresh"
+            title: i18n("Loading…")
+            hint: i18n("Reading your notes from disk.")
+        }
+    }
+    // Persistent explanation while a legacy import is stuck: there is no
+    // document to show and none may be invented. The wording is the
+    // controller's, so this and the startup toast can never drift apart.
+    Component { id: blockedComp
+        QN.EmptyState {
+            anchors.centerIn: parent
+            width: parent ? parent.width : 0
+            icon: "dialog-warning"
+            title: i18n("Your notes could not be imported yet")
+            hint: full.controller ? full.controller.migrationBlockedMessage : ""
+        }
+    }
+    // Dashboard and Tags are listed by the tab bar from this task on; their
+    // views land in the next two tasks. Say so rather than silently showing
+    // some other mode's content.
+    Component { id: dashboardComp
+        QN.EmptyState {
+            anchors.centerIn: parent
+            width: parent ? parent.width : 0
+            icon: "view-list-icons"
+            title: i18n("Dashboard")
+            hint: i18n("This view is not available yet.")
+        }
+    }
+    Component { id: tagsComp
+        QN.EmptyState {
+            anchors.centerIn: parent
+            width: parent ? parent.width : 0
+            icon: "tag"
+            title: i18n("Tags")
+            hint: i18n("This view is not available yet.")
+        }
     }
     Component { id: notesComp
         NotesView {
