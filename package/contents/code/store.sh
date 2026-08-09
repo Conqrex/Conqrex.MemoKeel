@@ -14,6 +14,9 @@
 # on the first load, and only when our own store.json does not exist yet, its
 # contents are COPIED across and the load result carries a transport-only
 # "migratedFrom" field. The legacy dir is never moved, modified or deleted.
+# If that copy is applicable but FAILS, load prints
+# {"ok":false,"reason":"migration_failed",...} and exits 3 without creating a
+# store.json — a default document there would disable the migration for good.
 #
 # Subcommands (all print one JSON line / document on stdout; diagnostics -> stderr):
 #   init                       ensure dirs + store.json; print the (migrated) doc
@@ -127,19 +130,42 @@ migrate_store() {
 # absent, so it cannot fire twice and cannot overwrite live data. The copy runs
 # under the same flock the writers use, and store.json is renamed into place
 # last, so an interrupted or concurrent run cannot leave a half-written store.
+#
+# Three outcomes, and callers MUST tell them apart:
+#   return 0 + empty MIGRATED_FROM   nothing to do (no legacy dir / already ours)
+#                                    OR a benign race: another instance did it
+#   return 0 + MIGRATED_FROM set     we performed the migration
+#   return 1 + MIGRATION_FAILED set  a migration WAS applicable and did not
+#                                    succeed. The destination is deliberately
+#                                    left without a store.json: writing anything
+#                                    there (even a default document) would
+#                                    satisfy the `[ ! -f "$STORE" ]` guard above
+#                                    forever and strand the user's notes.
+#
+# Subshell exit codes (deliberately distinct — a lock timeout is a real failure,
+# losing the race to another instance is not):
+#   10 migrated by us          11 benign race, someone else migrated
+#   12 lock timeout            13 copy of store.json failed
+#   14 rename into place failed 1 lock file could not be opened
 MIGRATED_FROM=""
+MIGRATION_FAILED=""
 maybe_migrate_legacy() {
     [ -n "$MIGRATE_FROM" ]             || return 0
     [ "$MIGRATE_FROM" != "$DATA_DIR" ] || return 0
     [ -f "$MIGRATE_FROM/store.json" ]  || return 0
     [ ! -f "$STORE" ]                  || return 0
 
-    mkdir -p "$DATA_DIR" || return 0
+    if ! mkdir -p "$DATA_DIR" 2>/dev/null; then
+        MIGRATION_FAILED="mkdir_failed"
+        err "store.sh: migration from $MIGRATE_FROM failed (mkdir_failed) — destination left empty, next launch will retry"
+        return 1
+    fi
     (
-        flock -w 10 9 || { err "store.sh: could not acquire lock for migration"; exit 1; }
+        flock -w 10 9 || exit 12
         # re-check under the lock: another instance may have won the race
-        [ ! -f "$STORE" ] || exit 1
-        cp -a "$MIGRATE_FROM/store.json" "$STORE.migrating" 2>/dev/null || exit 1
+        [ ! -f "$STORE" ] || exit 11
+        cp -a "$MIGRATE_FROM/store.json" "$STORE.migrating" 2>/dev/null \
+            || { rm -f "$STORE.migrating" 2>/dev/null; exit 13; }
         # best-effort side data; a failure here must not lose the document
         for d in attachments backups journal; do
             if [ -d "$MIGRATE_FROM/$d" ]; then
@@ -147,18 +173,37 @@ maybe_migrate_legacy() {
                     && cp -a "$MIGRATE_FROM/$d/." "$DATA_DIR/$d/" 2>/dev/null
             fi
         done
-        mv -f "$STORE.migrating" "$STORE" || exit 1
+        mv -f "$STORE.migrating" "$STORE" 2>/dev/null \
+            || { rm -f "$STORE.migrating" 2>/dev/null; exit 14; }
         exit 10
     ) 9>"$LOCK"
-    # 10 == the subshell actually completed a migration
-    [ "$?" -eq 10 ] || return 0
-    MIGRATED_FROM="$MIGRATE_FROM"
-    err "store.sh: migrated data from $MIGRATE_FROM"
+    case "$?" in
+        10) MIGRATED_FROM="$MIGRATE_FROM"
+            err "store.sh: migrated data from $MIGRATE_FROM"
+            return 0 ;;
+        11) err "store.sh: another instance completed the migration first — using it"
+            return 0 ;;
+        12) MIGRATION_FAILED="lock_timeout" ;;
+        13) MIGRATION_FAILED="copy_failed" ;;
+        14) MIGRATION_FAILED="rename_failed" ;;
+        1)  MIGRATION_FAILED="lock_unavailable" ;;
+        *)  MIGRATION_FAILED="unknown" ;;
+    esac
+    err "store.sh: migration from $MIGRATE_FROM failed ($MIGRATION_FAILED) — destination left empty, next launch will retry"
+    return 1
 }
 
 cmd_load() {
     ensure_dirs
-    maybe_migrate_legacy
+    if ! maybe_migrate_legacy; then
+        # Applicable-but-failed. Falling through would create a default document
+        # and permanently disable the migration, so report the failure on STDOUT
+        # (the only channel QML reads) and exit non-zero without writing anything.
+        jq -cn --arg from "$MIGRATE_FROM" --arg reason "$MIGRATION_FAILED" \
+            '{ok:false, reason:"migration_failed", migrationFailed:true,
+              migrateFrom:$from, detail:$reason}'
+        return 3
+    fi
     if [ ! -f "$STORE" ]; then
         if [ -f "$LASTGOOD" ] && valid_json "$LASTGOOD"; then
             err "store.sh: store.json missing — restoring last-good journal"
@@ -396,7 +441,10 @@ case "$cmd" in
     attach)   cmd_attach "${2:-}" ;;
     gc)       cmd_gc "${2:-}" ;;
     backup)   cmd_backup ;;
-    migrate)  out="$(cmd_load)"
+    migrate)  out="$(cmd_load)"; rc=$?
+              # a failed-but-applicable migration must never be persisted: pass
+              # the failure object straight through and touch nothing on disk
+              if [ "$rc" -ne 0 ]; then printf '%s\n' "$out"; exit "$rc"; fi
               # strip the transport-only marker before persisting; a jq failure
               # (empty/invalid load) must leave store.json alone
               if printf '%s' "$out" | jq -ce 'del(.migratedFrom)' > "$STORE.$$.tmp" 2>/dev/null; then

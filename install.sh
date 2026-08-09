@@ -6,6 +6,8 @@ DIR="$(cd "$(dirname "$0")" && pwd)"
 PKG="$DIR/package"
 ID="com.conqrex.memokeel"
 OLD_ID="com.conqrex.quicknotes"
+# same resolution store.sh uses, so the printed paths match reality
+DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
 
 # make sure the data broker is executable inside the package before packaging
 chmod +x "$PKG/contents/code/store.sh" 2>/dev/null || true
@@ -19,14 +21,15 @@ else
 fi
 
 echo
-echo "Installed to ~/.local/share/plasma/plasmoids/$ID/"
+echo "Installed to $DATA_HOME/plasma/plasmoids/$ID/"
 echo
 echo "MemoKeel is a NEW package id (was $OLD_ID), so it does not replace an"
 echo "existing Quick Notes applet in place. Add it once:"
 echo "    right-click your desktop or panel -> Add Widgets -> search 'MemoKeel'."
 echo
 echo "Your notes migrate automatically on first run: the old folder"
-echo "~/.local/share/conqrex/quicknotes/ is COPIED to ~/.local/share/conqrex/memokeel/"
+echo "$DATA_HOME/conqrex/quicknotes/ is COPIED to"
+echo "$DATA_HOME/conqrex/memokeel/"
 echo "and left in place as a backup — nothing there is moved or deleted."
 echo
 echo "Once MemoKeel is on your panel and your notes are there, remove the"

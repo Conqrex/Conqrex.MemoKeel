@@ -20,6 +20,13 @@ PlasmoidItem {
     property double nowMs: Date.now()
     property string lastSaved: ""
     property string statusMessage: ""
+    // Status raised before the popup has ever been open (i.e. during the startup
+    // load) cannot be toasted: FullView's Toast either does not exist yet or is
+    // animating inside a closed popup, and the Connections handler clears
+    // statusMessage regardless. Park those here instead; FullView drains this
+    // exactly once, when it is actually able to show something.
+    property string pendingStatusMessage: ""
+    function postStatus(msg) { root.pendingStatusMessage = msg; }
 
     // ----- config mirrors -------------------------------------------------
     readonly property string accentKey: Plasmoid.configuration.accent
@@ -48,14 +55,19 @@ PlasmoidItem {
 
     // POSIX single-quote escaping so any path/payload survives the shell
     function shq(s) { return "'" + ("" + s).replace(/'/g, "'\\''") + "'"; }
-    function envPrefix() {
-        // An explicit data directory is authoritative: never migrate into it.
+    // QN_MIGRATE_FROM is read by the load path only, so only the load path sends
+    // it — save/attach/gc/export/import must not carry it. An explicit data
+    // directory is authoritative: never migrate into it.
+    function envPrefix(forLoad) {
         return "QN_DATA_DIR=" + shq(dataDir)
-             + (hasDataDirOverride ? "" : " QN_MIGRATE_FROM=" + shq(legacyDataDir()))
+             + ((forLoad === true && !hasDataDirOverride)
+                    ? " QN_MIGRATE_FROM=" + shq(legacyDataDir()) : "")
              + " QN_BACKUP_COUNT=" + Plasmoid.configuration.backupCount
              + " QN_MAX_BYTES=" + (Plasmoid.configuration.maxAttachmentMB * 1048576) + " ";
     }
-    function storeCmd(args) { return envPrefix() + "bash " + shq(scriptPath) + " " + args; }
+    function storeCmd(args, forLoad) {
+        return envPrefix(forLoad === true) + "bash " + shq(scriptPath) + " " + args;
+    }
 
     // ----- derived badge counts -------------------------------------------
     function countOpenTodos(d) {
@@ -129,11 +141,42 @@ PlasmoidItem {
 
     // ----- load -----------------------------------------------------------
     property bool _migrationAnnounced: false
-    function load() { exec.exec(storeCmd("init"), { kind: "load" }); }
+    property bool _migrationFailureAnnounced: false
+    // true while store.sh reports that a legacy import was due but did not
+    // succeed: there is no document to show and none must be invented
+    property bool _migrationBlocked: false
+    function load() { exec.exec(storeCmd("init", true), { kind: "load" }); }
+
+    // A blocked migration is transient (a lock held by another instance, a
+    // momentarily unwritable directory), so keep retrying while we are stuck.
+    Timer {
+        interval: 30000
+        repeat: true
+        running: root._migrationBlocked
+        onTriggered: root.load()
+    }
 
     function applyLoaded(out, code) {
         var d;
         try { d = JSON.parse(out); } catch (e) { d = null; }
+
+        // store.sh had a legacy import to do and could not finish it, so it
+        // deliberately created no store.json. Substituting a default document
+        // here would show an empty widget as if it were the user's data and then
+        // save that emptiness back as authoritative — so show nothing, say why,
+        // and let the retry timer try again.
+        if (d && d.migrationFailed === true) {
+            root._migrationBlocked = true;
+            if (!root._migrationFailureAnnounced) {
+                root._migrationFailureAnnounced = true;
+                root.postStatus(i18n(
+                    "Could not import your notes from %1 yet — nothing there was changed or deleted. MemoKeel will keep retrying.",
+                    ("" + (d.migrateFrom || ""))));
+            }
+            return;
+        }
+        root._migrationBlocked = false;
+
         if (!d || code !== 0) { d = Schema.defaultDoc(); }
 
         // transport-only marker from store.sh: one toast, then drop it so the
@@ -142,7 +185,7 @@ PlasmoidItem {
         if (d.migratedFrom !== undefined) delete d.migratedFrom;
         if (migratedFrom !== "" && !root._migrationAnnounced) {
             root._migrationAnnounced = true;
-            root.statusMessage = i18n("Imported your notes from %1", migratedFrom);
+            root.postStatus(i18n("Imported your notes from %1", migratedFrom));
         }
 
         // first-run device id, persisted to both the doc and config

@@ -50,9 +50,14 @@ Item {
     Layout.minimumWidth: Kirigami.Units.gridUnit * 21
     Layout.minimumHeight: Kirigami.Units.gridUnit * 16
 
+    // A toast is only worth showing once there is somewhere to show it: inside an
+    // open popup, or on the desktop where the view is permanently visible.
+    readonly property bool canToast: full.everOpened || full.isDesktop
+
     Component.onCompleted: {
         if (controller) full.currentMode = Plasmoid.configuration.lastMode || "notes";
         if (popupOpen) full.everOpened = true;
+        full.drainPendingStatus();
     }
     onCurrentModeChanged: if (controller && currentMode !== "search") Plasmoid.configuration.lastMode = currentMode
 
@@ -62,6 +67,21 @@ Item {
         function onStatusMessageChanged() {
             if (controller.statusMessage !== "") { toast.show(controller.statusMessage); controller.statusMessage = ""; }
         }
+        function onPendingStatusMessageChanged() { full.drainPendingStatus(); }
+    }
+
+    // Messages raised at startup (the legacy-import notice) are parked in
+    // controller.pendingStatusMessage rather than statusMessage, because at that
+    // point either this item does not exist yet or the popup is shut and the
+    // toast would animate unseen. Drain it the first time we can actually show
+    // one; clearing it is what makes it show exactly once, not on every open.
+    onCanToastChanged: full.drainPendingStatus()
+    function drainPendingStatus() {
+        if (!controller || !full.canToast) return;
+        var msg = "" + controller.pendingStatusMessage;
+        if (msg === "") return;
+        controller.pendingStatusMessage = "";
+        toast.show(msg);
     }
 
     function openNote(id) { full.editingNoteId = id; }
