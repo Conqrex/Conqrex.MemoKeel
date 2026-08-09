@@ -10,6 +10,7 @@ KCM.SimpleKCM {
 
     // alias-backed entries (auto-synced to config)
     property alias cfg_timeFormat24h: time24Box.checked
+    property alias cfg_followSystemTheme: followSystemThemeBox.checked
     property alias cfg_sortDescending: sortDescBox.checked
     property alias cfg_popupWidthUnits: widthSpin.value
     property alias cfg_popupHeightUnits: heightSpin.value
@@ -77,6 +78,7 @@ KCM.SimpleKCM {
             onActivated: page.cfg_defaultNoteColor = currentValue
         }
         QQC2.CheckBox { id: time24Box; text: i18n("Use 24-hour time") }
+        QQC2.CheckBox { id: followSystemThemeBox; text: i18n("Follow system theme instead of the dark Conqrex look") }
         QQC2.SpinBox { id: widthSpin; from: 16; to: 60; Kirigami.FormData.label: i18n("Popup width (units):") }
         QQC2.SpinBox { id: heightSpin; from: 14; to: 60; Kirigami.FormData.label: i18n("Popup height (units):") }
 

@@ -5,6 +5,7 @@ import org.kde.plasma.plasmoid
 import org.kde.plasma.components as PlasmaComponents
 import org.kde.kirigami as Kirigami
 import "components" as QN
+import "theme" as T
 import "../code/model.js" as Model
 import "../code/search.js" as Search
 import "../code/theme.js" as Theme
@@ -52,7 +53,7 @@ ColumnLayout {
         Layout.fillWidth: true
         PlasmaComponents.Label {
             text: i18np("%1 open", "%1 open", view.openCount)
-            opacity: 0.6; font: Kirigami.Theme.smallFont
+            color: T.QN.textDim; font: Kirigami.Theme.smallFont
         }
         Item { Layout.fillWidth: true }
         QQC2.ToolButton {
@@ -132,6 +133,8 @@ ColumnLayout {
                         Layout.fillWidth: true
                         text: row.modelData.text
                         background: null
+                        color: T.QN.text
+                        placeholderTextColor: T.QN.textFaint
                         font.strikeout: row.done
                         onEditingFinished: if (text !== row.modelData.text) view.controller.updateItem("todos", row.modelData.id, { text: text })
                     }

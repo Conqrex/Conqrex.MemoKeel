@@ -4,13 +4,16 @@ import QtQuick.Controls as QQC2
 import org.kde.plasma.components as PlasmaComponents
 import org.kde.kirigami as Kirigami
 import "components" as QN
+import "theme" as T
 import "../code/theme.js" as Theme
 
 // A draggable kanban card. Dragging reparents it to the shared drag layer so it
 // floats above the columns; a column's DropArea reads cardId on drop. A "move to"
-// menu is the reliable fallback.
+// menu is the reliable fallback. Clicking the card asks for the editor.
 QN.NeonCard {
     id: card
+
+    signal editRequested(string id)
 
     property var controller
     property var cardData
@@ -35,6 +38,23 @@ QN.NeonCard {
     Drag.hotSpot.y: Kirigami.Units.gridUnit
 
     HoverHandler { id: ch }
+    TapHandler {
+        id: cardTap
+        acceptedButtons: Qt.LeftButton
+        // Same threshold as the DragHandler: a gesture is either a drag or a tap,
+        // never both. (The default is the system startDragDistance, which is larger
+        // than the drag threshold below, so a short drag used to do both.)
+        dragThreshold: drag.dragThreshold
+        onTapped: (ep) => {
+            // the ⋮ button is a child of the card; a tap that lands inside its bounds
+            // must not also open the editor. Gate purely on tap position — not on the
+            // button's enabled state, which stays true regardless of hover/visibility
+            // so touch and keyboard focus traversal can always reach it.
+            if (menuBtn.contains(menuBtn.mapFromItem(card, ep.position)))
+                return;
+            card.editRequested(card.cardId);
+        }
+    }
     DragHandler {
         id: drag
         // small threshold so taps/edits aren't treated as drags
@@ -59,18 +79,22 @@ QN.NeonCard {
             Layout.fillWidth: true
             spacing: Kirigami.Units.smallSpacing * 0.5
             QN.PriorityBadge { priority: card.cardData.priority }
-            QQC2.TextField {
+            PlasmaComponents.Label {
                 Layout.fillWidth: true
-                text: card.cardData.title
-                background: null
-                placeholderText: i18n("Card")
-                wrapMode: TextEdit.Wrap
-                onEditingFinished: if (text !== card.cardData.title) card.controller.updateItem("cards", card.cardId, { title: text })
+                text: card.cardData.title || i18n("(untitled)")
+                wrapMode: Text.Wrap
+                maximumLineCount: 3
+                elide: Text.ElideRight
+                color: T.QN.text
             }
             QQC2.ToolButton {
+                id: menuBtn
                 icon.name: "application-menu"; flat: true
                 icon.width: Kirigami.Units.iconSizes.small; icon.height: Kirigami.Units.iconSizes.small
-                opacity: ch.hovered ? 1 : 0
+                opacity: ch.hovered || cardMenu.visible ? 1 : 0
+                // kept enabled (not just opacity-hidden) so touch and keyboard focus
+                // traversal can still reach it — this is the documented fallback for
+                // moving cards, so it must stay genuinely reachable, not just visible
                 onClicked: cardMenu.open()
                 QQC2.Menu {
                     id: cardMenu

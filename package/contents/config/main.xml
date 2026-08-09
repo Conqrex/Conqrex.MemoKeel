@@ -19,6 +19,9 @@
             <label>Neon accent preset: cyan, sky, violet, lime, amber, rose or slate</label>
             <default>cyan</default>
         </entry>
+        <entry name="followSystemTheme" type="Bool">
+            <default>false</default>
+        </entry>
         <entry name="sortBy" type="String">
             <label>List sort key: updated, created, title, priority or due</label>
             <default>updated</default>
@@ -98,12 +101,12 @@
         </entry>
         <entry name="popupWidthUnits" type="Int">
             <label>Popup width in grid units</label>
-            <default>26</default>
+            <default>32</default>
             <min>16</min>
         </entry>
         <entry name="popupHeightUnits" type="Int">
             <label>Popup height in grid units</label>
-            <default>26</default>
+            <default>30</default>
             <min>14</min>
         </entry>
         <entry name="dataDirOverride" type="String">

@@ -3,6 +3,7 @@ import QtQuick.Layouts
 import QtQuick.Controls as QQC2
 import org.kde.plasma.components as PlasmaComponents
 import org.kde.kirigami as Kirigami
+import "theme" as T
 import "../code/theme.js" as Theme
 
 // Left neon icon rail. Emits modeSelected(mode). Highlights the active mode with
@@ -12,6 +13,7 @@ Rectangle {
 
     property string currentMode: "notes"
     property int overdue: 0
+    property int openTodos: 0
     property bool collapsed: false
     property bool enableKanban: true
     property bool enableBoard: false
@@ -32,8 +34,7 @@ Rectangle {
     }
 
     implicitWidth: collapsed ? Kirigami.Units.gridUnit * 2.6 : Kirigami.Units.gridUnit * 7
-    color: Qt.rgba(Kirigami.Theme.backgroundColor.r, Kirigami.Theme.backgroundColor.g,
-                   Kirigami.Theme.backgroundColor.b, 0.4)
+    color: T.QN.alpha(T.QN.surface, 0.6)
     radius: Kirigami.Units.smallSpacing
 
     ColumnLayout {
@@ -59,6 +60,18 @@ Rectangle {
 
                 Behavior on color { ColorAnimation { duration: Kirigami.Units.shortDuration } }
 
+                // soft glow ring for the active mode
+                Rectangle {
+                    visible: item.active
+                    anchors.fill: parent
+                    radius: parent.radius
+                    color: "transparent"
+                    border.width: 1
+                    border.color: T.QN.alpha(rail.accent, 0.25)
+                    scale: 1.06
+                    opacity: 0.6
+                }
+
                 // active accent stripe
                 Rectangle {
                     visible: item.active
@@ -81,8 +94,7 @@ Rectangle {
                         Kirigami.Icon {
                             anchors.fill: parent
                             source: item.modelData.icon
-                            color: item.active ? rail.accent : Kirigami.Theme.textColor
-                            opacity: item.active ? 1 : 0.8
+                            color: item.active ? rail.accent : T.QN.textDim
                         }
                         // overdue badge on the reminders entry
                         Rectangle {
@@ -102,13 +114,31 @@ Rectangle {
                                 font.bold: true
                             }
                         }
+                        // open to-do count badge on the To-Do entry
+                        Rectangle {
+                            visible: item.modelData.id === "todo" && rail.openTodos > 0
+                            anchors.right: parent.right
+                            anchors.top: parent.top
+                            anchors.margins: -3
+                            width: Kirigami.Units.gridUnit * 0.8
+                            height: width
+                            radius: width / 2
+                            color: rail.accent
+                            Text {
+                                anchors.centerIn: parent
+                                text: rail.openTodos > 9 ? "9+" : rail.openTodos
+                                color: "#0b0f1a"
+                                font.pixelSize: parent.height * 0.6
+                                font.bold: true
+                            }
+                        }
                     }
                     PlasmaComponents.Label {
                         visible: !rail.collapsed
                         Layout.fillWidth: true
                         text: item.modelData.label
                         elide: Text.ElideRight
-                        color: item.active ? rail.accent : Kirigami.Theme.textColor
+                        color: item.active ? rail.accent : T.QN.textDim
                         font.bold: item.active
                     }
                 }

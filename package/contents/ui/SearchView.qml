@@ -4,6 +4,7 @@ import QtQuick.Controls as QQC2
 import org.kde.plasma.components as PlasmaComponents
 import org.kde.kirigami as Kirigami
 import "components" as QN
+import "theme" as T
 import "../code/search.js" as Search
 import "../code/model.js" as Model
 import "../code/theme.js" as Theme
@@ -49,7 +50,7 @@ ColumnLayout {
     PlasmaComponents.Label {
         Layout.fillWidth: true
         text: i18n("Tags")
-        font.bold: true; opacity: 0.7
+        font.bold: true; color: T.QN.text
         visible: view.doc && Object.keys(view.doc.tags).length > 0
     }
     Flow {
@@ -125,18 +126,19 @@ ColumnLayout {
                         text: hit.it.title || hit.it.text || i18n("Untitled")
                         elide: Text.ElideRight
                         font.bold: true
+                        color: T.QN.text
                     }
                     PlasmaComponents.Label {
                         Layout.fillWidth: true
                         visible: text !== ""
                         text: hit.it.body ? Md.plainPreview(hit.it.body, 120) : ""
                         elide: Text.ElideRight
-                        opacity: 0.6; font: Kirigami.Theme.smallFont
+                        color: T.QN.textDim; font: Kirigami.Theme.smallFont
                     }
                 }
                 PlasmaComponents.Label {
                     text: ({ note: i18n("Note"), todo: i18n("To-Do"), card: i18n("Card"), reminder: i18n("Reminder") })[modelData.type]
-                    opacity: 0.45; font: Kirigami.Theme.smallFont
+                    color: T.QN.textFaint; font: Kirigami.Theme.smallFont
                 }
             }
         }

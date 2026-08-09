@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import org.kde.plasma.components as PlasmaComponents
 import org.kde.kirigami as Kirigami
+import "../theme" as T
 
 // A small tag pill: colored dot + #name, optionally removable, clickable to filter.
 Rectangle {
@@ -38,12 +39,12 @@ Rectangle {
         PlasmaComponents.Label {
             text: "#" + chip.tagName + (chip.count >= 0 ? "  " + chip.count : "")
             font: Kirigami.Theme.smallFont
-            color: Kirigami.Theme.textColor
+            color: T.QN.text
         }
         PlasmaComponents.Label {
             visible: chip.removable
             text: "✕"
-            opacity: 0.65
+            color: T.QN.textDim
             font: Kirigami.Theme.smallFont
             MouseArea {
                 anchors.fill: parent

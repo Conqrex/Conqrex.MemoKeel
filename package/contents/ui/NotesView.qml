@@ -5,6 +5,7 @@ import org.kde.plasma.plasmoid
 import org.kde.plasma.components as PlasmaComponents
 import org.kde.kirigami as Kirigami
 import "components" as QN
+import "theme" as T
 import "../code/model.js" as Model
 import "../code/search.js" as Search
 
@@ -41,7 +42,7 @@ ColumnLayout {
         spacing: Kirigami.Units.smallSpacing
         PlasmaComponents.Label {
             text: i18np("%1 note", "%1 notes", view.items.length)
-            opacity: 0.6; font: Kirigami.Theme.smallFont
+            color: T.QN.textDim; font: Kirigami.Theme.smallFont
         }
         Item { Layout.fillWidth: true }
         QQC2.ToolButton {

@@ -7,6 +7,7 @@ import org.kde.plasma.core as PlasmaCore
 import org.kde.plasma.components as PlasmaComponents
 import org.kde.kirigami as Kirigami
 import "components" as QN
+import "theme" as T
 import "../code/theme.js" as Theme
 
 // The popup shell: header, global search + quick-add, a left nav rail and a
@@ -26,6 +27,7 @@ Item {
     property string searchText: ""
     property string tagFilter: ""
     property string editingNoteId: ""
+    property string editingCardId: ""
     property bool showTrash: false
     property string importMode: "merge"
 
@@ -43,9 +45,9 @@ Item {
     property bool everOpened: false
     onPopupOpenChanged: if (popupOpen) everOpened = true
 
-    Layout.preferredWidth: Kirigami.Units.gridUnit * (controller ? Plasmoid.configuration.popupWidthUnits : 26)
-    Layout.preferredHeight: Kirigami.Units.gridUnit * (controller ? Plasmoid.configuration.popupHeightUnits : 26)
-    Layout.minimumWidth: Kirigami.Units.gridUnit * 19
+    Layout.preferredWidth: Kirigami.Units.gridUnit * (controller ? Plasmoid.configuration.popupWidthUnits : 32)
+    Layout.preferredHeight: Kirigami.Units.gridUnit * (controller ? Plasmoid.configuration.popupHeightUnits : 30)
+    Layout.minimumWidth: Kirigami.Units.gridUnit * 21
     Layout.minimumHeight: Kirigami.Units.gridUnit * 16
 
     Component.onCompleted: {
@@ -78,16 +80,35 @@ Item {
         switch (full.currentMode) {
         case "todo":
             id = controller.addTodo({ text: p.text, priority: p.priority, dueAt: p.dueAt }); coll = "todos"; break;
-        case "reminders":
-            id = controller.addReminder({ text: p.text, dueAt: p.dueAt || new Date(Date.now() + 3600000).toISOString() }); coll = "reminders"; break;
         case "kanban":
             var colId = full.firstColumnId();
             if (!colId) colId = controller.addColumn({ title: i18n("To Do") });
             id = controller.addCard(colId, { title: p.text, priority: p.priority, dueAt: p.dueAt }); coll = "cards"; break;
+        case "reminders":
+            // Reminders are added by ReminderAddRow, which owns its own parsing
+            // and chip-based due time. Never fall through to creating a note.
+            return;
         default:
             id = controller.addNote({ title: p.text, color: Plasmoid.configuration.defaultNoteColor }); coll = "notes"; break;
         }
         if (id && p.tagNames.length) controller.applyTagNames(coll, id, p.tagNames);
+    }
+
+    // feed the theme singleton: system palette + mode
+    Binding { target: T.QN; property: "followSystem"; value: Plasmoid.configuration.followSystemTheme }
+    Binding { target: T.QN; property: "sysWindow";    value: Kirigami.Theme.backgroundColor }
+    Binding { target: T.QN; property: "sysView";      value: Kirigami.Theme.backgroundColor }
+    Binding { target: T.QN; property: "sysText";      value: Kirigami.Theme.textColor }
+    Binding { target: T.QN; property: "sysHighlight"; value: Kirigami.Theme.highlightColor }
+
+    // opaque themed backdrop for the whole popup
+    Rectangle {
+        anchors.fill: parent
+        z: -1
+        radius: T.QN.radiusM
+        color: T.QN.bg
+        border.width: 1
+        border.color: T.QN.border
     }
 
     // ----------------------------------------------------------------- layout
@@ -106,7 +127,7 @@ Item {
                 Layout.preferredWidth: Kirigami.Units.iconSizes.medium
                 Layout.preferredHeight: Kirigami.Units.iconSizes.medium
             }
-            Kirigami.Heading { level: 3; text: i18n("Quick Notes") }
+            Kirigami.Heading { level: 3; text: i18n("Quick Notes"); color: T.QN.text }
             Item { Layout.fillWidth: true }
 
             QN.TagChip {
@@ -166,15 +187,21 @@ Item {
         QuickAddBar {
             id: quickAdd
             Layout.fillWidth: true
+            visible: full.currentMode !== "reminders"
             placeholder: {
                 switch (full.currentMode) {
                 case "todo": return i18n("Add a task…  #tag !priority ^due");
-                case "reminders": return i18n("Remind me to…  ^3h ^tomorrow ^14:30");
-                case "kanban": return i18n("Add a card…  #tag !priority");
+                case "kanban": return i18n("Add a card…  #tag !priority ^due");
                 default: return i18n("Add a note…  #tag");
                 }
             }
             onAddRequested: (p) => full.handleAdd(p)
+        }
+        ReminderAddRow {
+            Layout.fillWidth: true
+            visible: full.currentMode === "reminders"
+            controller: full.controller
+            onAdded: toast.show(i18n("Reminder added"))
         }
 
         // nav rail + content ----------------------------------------------
@@ -187,6 +214,7 @@ Item {
                 Layout.fillHeight: true
                 currentMode: full.currentMode
                 overdue: controller ? controller.overdueCount : 0
+                openTodos: controller ? controller.openTodoCount : 0
                 accent: full.accent
                 enableKanban: Plasmoid.configuration.enableKanban
                 enableBoard: Plasmoid.configuration.enableBoard
@@ -220,7 +248,7 @@ Item {
             spacing: Kirigami.Units.smallSpacing
             PlasmaComponents.Label {
                 Layout.fillWidth: true
-                opacity: 0.55
+                color: T.QN.textFaint
                 font: Kirigami.Theme.smallFont
                 elide: Text.ElideRight
                 text: {
@@ -233,7 +261,7 @@ Item {
             }
             PlasmaComponents.Label {
                 visible: controller && controller.lastSaved !== ""
-                opacity: 0.5
+                color: T.QN.textFaint
                 font: Kirigami.Theme.smallFont
                 text: controller ? i18n("Saved %1", controller.lastSaved) : ""
             }
@@ -269,7 +297,7 @@ Item {
         KanbanView {
             controller: full.controller; nowMs: full.nowMs; use24h: full.use24h; accent: full.accent
             query: full.searchText; tagFilter: full.tagFilter
-            onOpenRequested: (id) => full.openNote(id)
+            onEditRequested: (id) => full.editingCardId = id
         }
     }
     Component { id: boardComp
@@ -304,6 +332,27 @@ Item {
                 onClosed: full.editingNoteId = ""
                 onTagActivated: (t) => { full.tagFilter = t; full.editingNoteId = ""; full.currentMode = "notes"; }
                 onOpenNote: (id) => full.editingNoteId = id
+            }
+        }
+    }
+
+    // ---- card editor overlay ------------------------------------------------
+    Loader {
+        anchors.fill: parent
+        active: full.editingCardId !== ""
+        z: 55
+        sourceComponent: Rectangle {
+            color: Qt.rgba(0, 0, 0, 0.55)
+            MouseArea { anchors.fill: parent; onClicked: full.editingCardId = "" }
+            CardEditor {
+                anchors.centerIn: parent
+                width: Math.min(parent.width - Kirigami.Units.gridUnit, Kirigami.Units.gridUnit * 22)
+                height: Math.min(parent.height - Kirigami.Units.gridUnit, Kirigami.Units.gridUnit * 18)
+                controller: full.controller
+                cardId: full.editingCardId
+                nowMs: full.nowMs
+                use24h: full.use24h
+                onClosed: full.editingCardId = ""
             }
         }
     }

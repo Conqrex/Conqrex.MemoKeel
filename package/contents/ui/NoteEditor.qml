@@ -5,6 +5,7 @@ import org.kde.plasma.plasmoid
 import org.kde.plasma.components as PlasmaComponents
 import org.kde.kirigami as Kirigami
 import "components" as QN
+import "theme" as T
 import "../code/markdown.js" as Md
 import "../code/search.js" as Search
 import "../code/format.js" as Fmt
@@ -82,6 +83,17 @@ QN.NeonCard {
                 Layout.fillWidth: true
                 placeholderText: i18n("Title")
                 font.bold: true
+                selectByMouse: true
+                hoverEnabled: true
+                background: Rectangle {
+                    color: T.QN.inputBg
+                    radius: T.QN.radiusS
+                    border.width: 1
+                    border.color: titleField.activeFocus ? T.QN.alpha(Kirigami.Theme.highlightColor, 0.6)
+                                : titleField.hovered ? T.QN.borderHi : T.QN.border
+                }
+                color: T.QN.text
+                placeholderTextColor: T.QN.textFaint
                 onTextChanged: editor.markDirty()
             }
             QQC2.ToolButton {
@@ -159,6 +171,16 @@ QN.NeonCard {
                         placeholderText: i18n("Write in Markdown… use - [ ] for checklists and [[Title]] to link notes.")
                         wrapMode: TextEdit.Wrap
                         selectByMouse: true
+                        hoverEnabled: true
+                        background: Rectangle {
+                            color: T.QN.inputBg
+                            radius: T.QN.radiusS
+                            border.width: 1
+                            border.color: bodyArea.activeFocus ? T.QN.alpha(Kirigami.Theme.highlightColor, 0.6)
+                                        : bodyArea.hovered ? T.QN.borderHi : T.QN.border
+                        }
+                        color: T.QN.text
+                        placeholderTextColor: T.QN.textFaint
                         onTextChanged: editor.markDirty()
                     }
                 }
@@ -173,7 +195,7 @@ QN.NeonCard {
                     textFormat: TextEdit.RichText
                     wrapMode: TextEdit.Wrap
                     selectByMouse: true
-                    color: Kirigami.Theme.textColor
+                    color: T.QN.text
                     text: Md.toRichText(bodyArea.text)
                     onLinkActivated: (link) => {
                         if (link.indexOf("qn-wiki:") === 0) {
@@ -210,6 +232,17 @@ QN.NeonCard {
                 id: tagField
                 placeholderText: i18n("+ tag")
                 Layout.preferredWidth: Kirigami.Units.gridUnit * 6
+                selectByMouse: true
+                hoverEnabled: true
+                background: Rectangle {
+                    color: T.QN.inputBg
+                    radius: T.QN.radiusS
+                    border.width: 1
+                    border.color: tagField.activeFocus ? T.QN.alpha(Kirigami.Theme.highlightColor, 0.6)
+                                : tagField.hovered ? T.QN.borderHi : T.QN.border
+                }
+                color: T.QN.text
+                placeholderTextColor: T.QN.textFaint
                 onAccepted: {
                     var name = text.trim().replace(/^#/, "");
                     if (name !== "") {
@@ -238,7 +271,7 @@ QN.NeonCard {
             Layout.fillWidth: true
             visible: editor.backlinkIds.length > 0
             spacing: 2
-            PlasmaComponents.Label { text: i18n("Linked from"); font: Kirigami.Theme.smallFont; opacity: 0.6 }
+            PlasmaComponents.Label { text: i18n("Linked from"); font: Kirigami.Theme.smallFont; color: T.QN.textDim }
             Flow {
                 Layout.fillWidth: true
                 spacing: Kirigami.Units.smallSpacing * 0.6
@@ -256,6 +289,7 @@ QN.NeonCard {
                             anchors.centerIn: parent
                             text: bn ? (bn.title || i18n("Untitled")) : ""
                             font: Kirigami.Theme.smallFont
+                            color: T.QN.text
                         }
                         TapHandler { onTapped: { editor.flush(); editor.openNote(modelData); } }
                     }
@@ -268,7 +302,7 @@ QN.NeonCard {
             Layout.fillWidth: true
             PlasmaComponents.Label {
                 Layout.fillWidth: true
-                opacity: 0.5; font: Kirigami.Theme.smallFont
+                color: T.QN.textFaint; font: Kirigami.Theme.smallFont
                 text: editor.note ? i18n("Updated %1", Fmt.dateTimeShort(editor.note.updatedAt, editor.use24h)) : ""
             }
             QQC2.ToolButton {
