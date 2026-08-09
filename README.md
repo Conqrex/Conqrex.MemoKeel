@@ -1,12 +1,12 @@
 <p align="center">
-  <img src="assets/memokeel-banner.png" alt="MemoKeel" width="720">
+  <img src="package/contents/icons/memokeel-banner.svg" alt="MemoKeel" width="720">
 </p>
 
 <p align="center">
-  <b>Capture. Organize. Get things done.</b><br>
-  A professional, all-in-one quick-noting widget for KDE Plasma 6 —
-  a dashboard, notes, to-dos, kanban, reminders, tags and search in one
-  panel popup, with your data safe in a single local JSON file.
+  <b>Every note and task. One Plasma keel.</b><br>
+  A KDE Plasma 6 widget that keeps a dashboard, notes, to-dos, kanban,
+  reminders, tags and global search in one panel popup — local-first, in a
+  single JSON file you own, with no account and no sync service.
 </p>
 
 <p align="center">
@@ -49,8 +49,8 @@ tooltip previews your next reminder.
 ## 📦 Install
 
 ```sh
-git clone https://github.com/Conqrex/Conqrex.QuickNotes.git
-cd Conqrex.QuickNotes
+git clone https://github.com/Conqrex/Conqrex.MemoKeel.git
+cd Conqrex.MemoKeel
 ./install.sh            # installs or upgrades, per-user (no sudo)
 ```
 
@@ -182,10 +182,11 @@ save. **`code/store.sh` is the only thing that touches the filesystem**, invoked
 through a single `Plasma5Support.DataSource`. Markdown rendering HTML-escapes note
 bodies before producing RichText, so content can't inject markup.
 
-## 🐙 Sibling projects
+## 🛰️ Sibling projects
 
-[**Conqrex.OctoPulse**](https://github.com/Conqrex/Conqrex.OctoPulse) — every GitHub Actions run in one panel widget.
-[**Conqrex.Dockswain**](https://github.com/Conqrex/Conqrex.Dockswain) — manage Docker hosts over SSH from your panel.
+- [**OctoPulse**](https://github.com/Conqrex/Conqrex.OctoPulse) — every GitHub Actions run in one panel widget.
+- [**Dockswain**](https://github.com/Conqrex/Conqrex.Dockswain) — Docker host management over SSH.
+- [**CrewBeacon**](https://github.com/Conqrex/Conqrex.CrewBeacon) — AI quota, live coding agents, and usage history.
 
 ## ⚠️ Known issues
 

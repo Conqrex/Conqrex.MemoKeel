@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="960" height="320" viewBox="0 0 960 320" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="40" y1="20" x2="930" y2="300" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#08111F"/><stop offset="0.55" stop-color="#0B1B31"/><stop offset="1" stop-color="#151438"/>
+    </linearGradient>
+    <linearGradient id="sweep" x1="96" y1="52" x2="262" y2="272" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5EEAD4"/><stop offset="0.52" stop-color="#38BDF8"/><stop offset="1" stop-color="#A78BFA"/>
+    </linearGradient>
+    <linearGradient id="glass" x1="104" y1="60" x2="252" y2="264" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1E293B" stop-opacity="0.85"/><stop offset="1" stop-color="#0F172A" stop-opacity="0.9"/>
+    </linearGradient>
+    <filter id="glow" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="8" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="softglow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect x="2" y="2" width="956" height="316" rx="30" fill="url(#bg)" stroke="#243B5A" stroke-width="4"/>
+
+  <!-- keel wake -->
+  <path d="M96 246C132 262 224 262 260 246" stroke="#9AA7C7" stroke-opacity="0.16" stroke-width="10" stroke-linecap="round"/>
+  <path d="M112 268C142 280 214 280 244 268" stroke="#9AA7C7" stroke-opacity="0.09" stroke-width="8" stroke-linecap="round"/>
+
+  <!-- note hull: folded corner on top, keel point at the bottom -->
+  <path d="M106 58H222L250 86V166C250 210 222 240 178 258C134 240 106 210 106 166Z"
+        fill="url(#glass)" stroke="url(#sweep)" stroke-width="7" stroke-linejoin="round" filter="url(#glow)"/>
+  <path d="M222 58V86H250Z" fill="#38BDF8" fill-opacity="0.5"/>
+
+  <!-- note lines -->
+  <rect x="132" y="106" width="88" height="10" rx="5" fill="url(#sweep)" filter="url(#softglow)"/>
+  <rect x="132" y="130" width="64" height="10" rx="5" fill="#5EEAD4" fill-opacity="0.85"/>
+
+  <!-- checked item -->
+  <rect x="133" y="155" width="24" height="24" rx="6" fill="none" stroke="#A78BFA" stroke-width="6"/>
+  <path d="M137 167L144 174L156 159" stroke="#5EEAD4" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" filter="url(#softglow)"/>
+  <rect x="170" y="161" width="46" height="10" rx="5" fill="#A78BFA" fill-opacity="0.8"/>
+
+  <text x="325" y="137" fill="#F8FAFC" font-family="Inter,Segoe UI,sans-serif" font-size="67" font-weight="760" letter-spacing="-2">MemoKeel</text>
+  <text x="329" y="184" fill="#93C5FD" font-family="Inter,Segoe UI,sans-serif" font-size="25" font-weight="600">EVERY NOTE AND TASK. ONE PLASMA KEEL.</text>
+  <text x="329" y="226" fill="#A8B5CA" font-family="Inter,Segoe UI,sans-serif" font-size="20">Dashboard · notes · to-dos · kanban · reminders · tags · search</text>
+  <circle cx="337" cy="266" r="6" fill="#5EEAD4"/><text x="353" y="273" fill="#CBD5E1" font-family="Inter,Segoe UI,sans-serif" font-size="17">local-first</text>
+  <circle cx="455" cy="266" r="6" fill="#38BDF8"/><text x="471" y="273" fill="#CBD5E1" font-family="Inter,Segoe UI,sans-serif" font-size="17">one JSON file</text>
+  <circle cx="601" cy="266" r="6" fill="#A78BFA"/><text x="617" y="273" fill="#CBD5E1" font-family="Inter,Segoe UI,sans-serif" font-size="17">no account</text>
+</svg>
