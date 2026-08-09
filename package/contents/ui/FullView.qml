@@ -47,7 +47,7 @@ Item {
 
     Layout.preferredWidth: Kirigami.Units.gridUnit * (controller ? Plasmoid.configuration.popupWidthUnits : 32)
     Layout.preferredHeight: Kirigami.Units.gridUnit * (controller ? Plasmoid.configuration.popupHeightUnits : 30)
-    Layout.minimumWidth: Kirigami.Units.gridUnit * 19
+    Layout.minimumWidth: Kirigami.Units.gridUnit * 21
     Layout.minimumHeight: Kirigami.Units.gridUnit * 16
 
     Component.onCompleted: {
@@ -127,7 +127,7 @@ Item {
                 Layout.preferredWidth: Kirigami.Units.iconSizes.medium
                 Layout.preferredHeight: Kirigami.Units.iconSizes.medium
             }
-            Kirigami.Heading { level: 3; text: i18n("Quick Notes") }
+            Kirigami.Heading { level: 3; text: i18n("Quick Notes"); color: T.QN.text }
             Item { Layout.fillWidth: true }
 
             QN.TagChip {
@@ -214,6 +214,7 @@ Item {
                 Layout.fillHeight: true
                 currentMode: full.currentMode
                 overdue: controller ? controller.overdueCount : 0
+                openTodos: controller ? controller.openTodoCount : 0
                 accent: full.accent
                 enableKanban: Plasmoid.configuration.enableKanban
                 enableBoard: Plasmoid.configuration.enableBoard
@@ -247,7 +248,7 @@ Item {
             spacing: Kirigami.Units.smallSpacing
             PlasmaComponents.Label {
                 Layout.fillWidth: true
-                opacity: 0.55
+                color: T.QN.textFaint
                 font: Kirigami.Theme.smallFont
                 elide: Text.ElideRight
                 text: {
@@ -260,7 +261,7 @@ Item {
             }
             PlasmaComponents.Label {
                 visible: controller && controller.lastSaved !== ""
-                opacity: 0.5
+                color: T.QN.textFaint
                 font: Kirigami.Theme.smallFont
                 text: controller ? i18n("Saved %1", controller.lastSaved) : ""
             }

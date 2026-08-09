@@ -339,6 +339,17 @@ PlasmoidItem {
     toolTipSubText: {
         if (!loaded) return i18n("Loading…");
         var parts = [];
+        if (doc && doc.reminders.length) {
+            var next = null;
+            for (var i = 0; i < doc.reminders.length; i++) {
+                var r = doc.reminders[i];
+                if (r.ackedAt && (!r.repeat || r.repeat === "none")) continue;
+                var due = new Date(r.snoozeUntil || r.dueAt).getTime();
+                if (due > nowMs && (!next || due < next.due)) next = { due: due, text: r.text };
+            }
+            if (next) parts.push(i18n("Next: %1 (%2)", next.text,
+                Qt.formatDateTime(new Date(next.due), use24h ? "ddd hh:mm" : "ddd h:mm AP")));
+        }
         if (openTodoCount > 0) parts.push(i18np("%1 open to-do", "%1 open to-dos", openTodoCount));
         if (overdueCount > 0) parts.push(i18np("%1 reminder due", "%1 reminders due", overdueCount));
         if (doc && doc.notes.length > 0) parts.push(i18np("%1 note", "%1 notes", doc.notes.length));

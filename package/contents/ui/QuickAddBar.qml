@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls as QQC2
 import org.kde.kirigami as Kirigami
+import "theme" as T
 import "../code/tokens.js" as Tokens
 
 // Always-visible add row. Parses ClickUp-style inline tokens:
@@ -30,6 +31,14 @@ RowLayout {
         placeholderText: bar.placeholder
         selectByMouse: true
         onAccepted: bar.submit()
+        background: Rectangle {
+            color: T.QN.inputBg
+            radius: T.QN.radiusS
+            border.width: 1
+            border.color: field.activeFocus ? T.QN.alpha(Kirigami.Theme.highlightColor, 0.6) : T.QN.border
+        }
+        color: T.QN.text
+        placeholderTextColor: T.QN.textFaint
     }
     QQC2.Button {
         icon.name: "list-add"
