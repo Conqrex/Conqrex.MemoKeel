@@ -403,7 +403,10 @@ Item {
         QuickAddBar {
             id: quickAdd
             Layout.fillWidth: true
-            visible: full.currentMode !== "reminders"
+            // The dashboard carries its own per-pane add rows, and the
+            // reminders mode has ReminderAddRow; a third field above either
+            // would just be one more place the same text could go.
+            visible: full.currentMode !== "reminders" && full.currentMode !== "dashboard"
             // Without a document every add intent would patch `null`.
             enabled: full.hasDoc
             hint: {
@@ -560,18 +563,16 @@ Item {
             hint: full.controller ? full.controller.migrationBlockedMessage : ""
         }
     }
-    // Dashboard and Tags are listed by the tab bar from this task on; their
-    // views land in the next two tasks. Say so rather than silently showing
-    // some other mode's content.
     Component { id: dashboardComp
-        QN.EmptyState {
-            anchors.centerIn: parent
-            width: parent ? parent.width : 0
-            icon: "view-list-icons"
-            title: i18n("Dashboard")
-            hint: i18n("This view is not available yet.")
+        DashboardView {
+            controller: full.controller; nowMs: full.nowMs; use24h: full.use24h; accent: full.accent
+            onModeRequested: (m) => full.selectMode(m)
+            onOpenRequested: (id) => full.openNote(id)
+            onTagFilterRequested: (t, m) => { full.tagFilter = t; full.selectMode(m); }
         }
     }
+    // Tags is listed by the tab bar; its view lands in the next task. Say so
+    // rather than silently showing some other mode's content.
     Component { id: tagsComp
         QN.EmptyState {
             anchors.centerIn: parent
