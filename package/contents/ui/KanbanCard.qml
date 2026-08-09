@@ -4,13 +4,16 @@ import QtQuick.Controls as QQC2
 import org.kde.plasma.components as PlasmaComponents
 import org.kde.kirigami as Kirigami
 import "components" as QN
+import "theme" as T
 import "../code/theme.js" as Theme
 
 // A draggable kanban card. Dragging reparents it to the shared drag layer so it
 // floats above the columns; a column's DropArea reads cardId on drop. A "move to"
-// menu is the reliable fallback.
+// menu is the reliable fallback. Clicking the card asks for the editor.
 QN.NeonCard {
     id: card
+
+    signal editRequested(string id)
 
     property var controller
     property var cardData
@@ -35,6 +38,10 @@ QN.NeonCard {
     Drag.hotSpot.y: Kirigami.Units.gridUnit
 
     HoverHandler { id: ch }
+    TapHandler {
+        acceptedButtons: Qt.LeftButton
+        onTapped: card.editRequested(card.cardId)
+    }
     DragHandler {
         id: drag
         // small threshold so taps/edits aren't treated as drags
@@ -59,13 +66,13 @@ QN.NeonCard {
             Layout.fillWidth: true
             spacing: Kirigami.Units.smallSpacing * 0.5
             QN.PriorityBadge { priority: card.cardData.priority }
-            QQC2.TextField {
+            PlasmaComponents.Label {
                 Layout.fillWidth: true
-                text: card.cardData.title
-                background: null
-                placeholderText: i18n("Card")
-                wrapMode: TextEdit.Wrap
-                onEditingFinished: if (text !== card.cardData.title) card.controller.updateItem("cards", card.cardId, { title: text })
+                text: card.cardData.title || i18n("(untitled)")
+                wrapMode: Text.Wrap
+                maximumLineCount: 3
+                elide: Text.ElideRight
+                color: T.QN.text
             }
             QQC2.ToolButton {
                 icon.name: "application-menu"; flat: true

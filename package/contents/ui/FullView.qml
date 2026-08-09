@@ -27,6 +27,7 @@ Item {
     property string searchText: ""
     property string tagFilter: ""
     property string editingNoteId: ""
+    property string editingCardId: ""
     property bool showTrash: false
     property string importMode: "merge"
 
@@ -287,7 +288,7 @@ Item {
         KanbanView {
             controller: full.controller; nowMs: full.nowMs; use24h: full.use24h; accent: full.accent
             query: full.searchText; tagFilter: full.tagFilter
-            onOpenRequested: (id) => full.openNote(id)
+            onEditRequested: (id) => full.editingCardId = id
         }
     }
     Component { id: boardComp
@@ -322,6 +323,27 @@ Item {
                 onClosed: full.editingNoteId = ""
                 onTagActivated: (t) => { full.tagFilter = t; full.editingNoteId = ""; full.currentMode = "notes"; }
                 onOpenNote: (id) => full.editingNoteId = id
+            }
+        }
+    }
+
+    // ---- card editor overlay ------------------------------------------------
+    Loader {
+        anchors.fill: parent
+        active: full.editingCardId !== ""
+        z: 55
+        sourceComponent: Rectangle {
+            color: Qt.rgba(0, 0, 0, 0.55)
+            MouseArea { anchors.fill: parent; onClicked: full.editingCardId = "" }
+            CardEditor {
+                anchors.centerIn: parent
+                width: Math.min(parent.width - Kirigami.Units.gridUnit, Kirigami.Units.gridUnit * 22)
+                height: Math.min(parent.height - Kirigami.Units.gridUnit, Kirigami.Units.gridUnit * 18)
+                controller: full.controller
+                cardId: full.editingCardId
+                nowMs: full.nowMs
+                use24h: full.use24h
+                onClosed: full.editingCardId = ""
             }
         }
     }
