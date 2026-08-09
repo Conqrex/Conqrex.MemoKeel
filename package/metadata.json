@@ -1,12 +1,12 @@
 {
     "KPlugin": {
-        "Id": "com.conqrex.quicknotes",
-        "Name": "Conqrex Quick Notes",
-        "Description": "A professional quick-noting hub: markdown notes, to-do lists, a kanban board, reminders with desktop notifications, tags, global search and image attachments — all in one neon-glass widget.",
-        "Icon": "com.conqrex.quicknotes",
+        "Id": "com.conqrex.memokeel",
+        "Name": "MemoKeel",
+        "Description": "MemoKeel is a professional quick-noting hub: markdown notes, to-do lists, a kanban board, reminders with desktop notifications, tags, global search and image attachments — all in one neon-glass widget.",
+        "Icon": "com.conqrex.memokeel",
         "Category": "Utilities",
         "License": "MIT",
-        "Version": "0.1.1",
+        "Version": "0.2.0",
         "Authors": [
             {
                 "Name": "S. Aydin Icen",

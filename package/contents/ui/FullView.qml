@@ -122,12 +122,12 @@ Item {
             Layout.fillWidth: true
             spacing: Kirigami.Units.smallSpacing
             Kirigami.Icon {
-                source: "com.conqrex.quicknotes"
+                source: "com.conqrex.memokeel"
                 fallback: "view-pim-notes"
                 Layout.preferredWidth: Kirigami.Units.iconSizes.medium
                 Layout.preferredHeight: Kirigami.Units.iconSizes.medium
             }
-            Kirigami.Heading { level: 3; text: i18n("Quick Notes"); color: T.QN.text }
+            Kirigami.Heading { level: 3; text: i18n("MemoKeel"); color: T.QN.text }
             Item { Layout.fillWidth: true }
 
             QN.TagChip {
@@ -383,7 +383,7 @@ Item {
         id: exportJsonDialog
         fileMode: Platform.FileDialog.SaveFile
         nameFilters: [i18n("JSON backup (*.json)")]
-        currentFile: "file://quicknotes-backup.json"
+        currentFile: "file://memokeel-backup.json"
         onAccepted: if (full.controller) full.controller.exportJson(("" + file).replace(/^file:\/\//, ""))
     }
     Platform.FolderDialog {

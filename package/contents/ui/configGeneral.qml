@@ -39,7 +39,7 @@ KCM.SimpleKCM {
         if (override !== "") return override.replace(/^file:\/\//, "");
         var base = ("" + StandardPaths.writableLocation(StandardPaths.GenericDataLocation)).replace(/^file:\/\//, "");
         if (base.charAt(base.length - 1) === "/") base = base.substring(0, base.length - 1);
-        return base + "/conqrex/quicknotes";
+        return base + "/conqrex/memokeel";
     }
 
     Kirigami.FormLayout {

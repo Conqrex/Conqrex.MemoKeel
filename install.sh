@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# Install or upgrade the Conqrex Quick Notes plasmoid (per-user, no sudo).
+# Install or upgrade the MemoKeel plasmoid (per-user, no sudo).
 set -e
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
 PKG="$DIR/package"
-ID="com.conqrex.quicknotes"
+ID="com.conqrex.memokeel"
+OLD_ID="com.conqrex.quicknotes"
 
 # make sure the data broker is executable inside the package before packaging
 chmod +x "$PKG/contents/code/store.sh" 2>/dev/null || true
@@ -19,6 +20,18 @@ fi
 
 echo
 echo "Installed to ~/.local/share/plasma/plasmoids/$ID/"
-echo "Add it: right-click your desktop or panel -> Add Widgets -> search 'Conqrex Quick Notes'."
-echo "If it is already placed, reload the shell to pick up changes:"
+echo
+echo "MemoKeel is a NEW package id (was $OLD_ID), so it does not replace an"
+echo "existing Quick Notes applet in place. Add it once:"
+echo "    right-click your desktop or panel -> Add Widgets -> search 'MemoKeel'."
+echo
+echo "Your notes migrate automatically on first run: the old folder"
+echo "~/.local/share/conqrex/quicknotes/ is COPIED to ~/.local/share/conqrex/memokeel/"
+echo "and left in place as a backup — nothing there is moved or deleted."
+echo
+echo "Once MemoKeel is on your panel and your notes are there, remove the"
+echo "superseded applet yourself with:"
+echo "    kpackagetool6 -t Plasma/Applet -r $OLD_ID"
+echo
+echo "If MemoKeel is already placed, reload the shell to pick up changes:"
 echo "    kquitapp6 plasmashell && kstart plasmashell"

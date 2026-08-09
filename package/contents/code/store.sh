@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# store.sh — the SOLE filesystem writer for the Conqrex Quick Notes widget.
+# store.sh — the SOLE filesystem writer for the MemoKeel widget.
 #
 # QML never touches the disk; it shells out to this broker through
 # Plasma5Support.DataSource{engine:"executable"}. The whole data set lives in a
@@ -9,7 +9,11 @@
 # recovery and pre-migration / pre-import / rolling backups.
 #
 # Data dir: $QN_DATA_DIR if set (QML passes the StandardPaths-resolved path or a
-# user override), else ${XDG_DATA_HOME:-$HOME/.local/share}/conqrex/quicknotes.
+# user override), else ${XDG_DATA_HOME:-$HOME/.local/share}/conqrex/memokeel.
+# $QN_MIGRATE_FROM may name a pre-rename data dir (the old .../conqrex/quicknotes):
+# on the first load, and only when our own store.json does not exist yet, its
+# contents are COPIED across and the load result carries a transport-only
+# "migratedFrom" field. The legacy dir is never moved, modified or deleted.
 #
 # Subcommands (all print one JSON line / document on stdout; diagnostics -> stderr):
 #   init                       ensure dirs + store.json; print the (migrated) doc
@@ -29,7 +33,8 @@ set -u
 SCHEMA_VERSION=1
 APP_VERSION="0.1.0"
 
-DATA_DIR="${QN_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/conqrex/quicknotes}"
+DATA_DIR="${QN_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/conqrex/memokeel}"
+MIGRATE_FROM="${QN_MIGRATE_FROM:-}"
 STORE="$DATA_DIR/store.json"
 LOCK="$DATA_DIR/store.lock"
 ATTACH_DIR="$DATA_DIR/attachments"
@@ -116,8 +121,44 @@ migrate_store() {
     normalize < "$STORE"
 }
 
+# One-shot import of a pre-rename data directory. Copies, never moves: the
+# legacy directory is left untouched as the user's fallback. No-op unless the
+# caller names a legacy dir that has a store.json and our own store.json is
+# absent, so it cannot fire twice and cannot overwrite live data. The copy runs
+# under the same flock the writers use, and store.json is renamed into place
+# last, so an interrupted or concurrent run cannot leave a half-written store.
+MIGRATED_FROM=""
+maybe_migrate_legacy() {
+    [ -n "$MIGRATE_FROM" ]             || return 0
+    [ "$MIGRATE_FROM" != "$DATA_DIR" ] || return 0
+    [ -f "$MIGRATE_FROM/store.json" ]  || return 0
+    [ ! -f "$STORE" ]                  || return 0
+
+    mkdir -p "$DATA_DIR" || return 0
+    (
+        flock -w 10 9 || { err "store.sh: could not acquire lock for migration"; exit 1; }
+        # re-check under the lock: another instance may have won the race
+        [ ! -f "$STORE" ] || exit 1
+        cp -a "$MIGRATE_FROM/store.json" "$STORE.migrating" 2>/dev/null || exit 1
+        # best-effort side data; a failure here must not lose the document
+        for d in attachments backups journal; do
+            if [ -d "$MIGRATE_FROM/$d" ]; then
+                mkdir -p "$DATA_DIR/$d" 2>/dev/null \
+                    && cp -a "$MIGRATE_FROM/$d/." "$DATA_DIR/$d/" 2>/dev/null
+            fi
+        done
+        mv -f "$STORE.migrating" "$STORE" || exit 1
+        exit 10
+    ) 9>"$LOCK"
+    # 10 == the subshell actually completed a migration
+    [ "$?" -eq 10 ] || return 0
+    MIGRATED_FROM="$MIGRATE_FROM"
+    err "store.sh: migrated data from $MIGRATE_FROM"
+}
+
 cmd_load() {
     ensure_dirs
+    maybe_migrate_legacy
     if [ ! -f "$STORE" ]; then
         if [ -f "$LASTGOOD" ] && valid_json "$LASTGOOD"; then
             err "store.sh: store.json missing — restoring last-good journal"
@@ -137,7 +178,13 @@ cmd_load() {
             default_doc > "$STORE"
         fi
     fi
-    migrate_store
+    # migratedFrom is transport-only — injected into the printed document so the
+    # UI can toast once, never written into store.json (see the `migrate` case).
+    if [ -n "$MIGRATED_FROM" ]; then
+        migrate_store | jq -c --arg mf "$MIGRATED_FROM" '. + {migratedFrom: $mf}'
+    else
+        migrate_store
+    fi
 }
 
 cmd_save() {
@@ -279,7 +326,7 @@ cmd_exportmd() {
 
     local count=0 idx="$dir/index.md"
     : > "$idx"
-    printf '# Quick Notes export\n\n_Exported %s_\n\n' "$(iso_now)" >> "$idx"
+    printf '# MemoKeel export\n\n_Exported %s_\n\n' "$(iso_now)" >> "$idx"
 
     local n total
     total="$(jq -r '.notes | length' "$STORE")"
@@ -349,7 +396,15 @@ case "$cmd" in
     attach)   cmd_attach "${2:-}" ;;
     gc)       cmd_gc "${2:-}" ;;
     backup)   cmd_backup ;;
-    migrate)  out="$(cmd_load)"; printf '%s' "$out" > "$STORE.$$.tmp" && mv -f "$STORE.$$.tmp" "$STORE"; printf '%s\n' "$out" ;;
+    migrate)  out="$(cmd_load)"
+              # strip the transport-only marker before persisting; a jq failure
+              # (empty/invalid load) must leave store.json alone
+              if printf '%s' "$out" | jq -ce 'del(.migratedFrom)' > "$STORE.$$.tmp" 2>/dev/null; then
+                  mv -f "$STORE.$$.tmp" "$STORE"
+              else
+                  rm -f "$STORE.$$.tmp"
+              fi
+              printf '%s\n' "$out" ;;
     export)   cmd_export "${2:-}" ;;
     exportmd) cmd_exportmd "${2:-}" ;;
     import)   cmd_import "${2:-}" ;;

@@ -6,7 +6,7 @@ import org.kde.kirigami as Kirigami
 import "../code/schema.js" as Schema
 import "../code/model.js" as Model
 
-// Quick Notes — a unified notes / to-do / kanban / reminders hub. main.qml owns
+// MemoKeel — a unified notes / to-do / kanban / reminders hub. main.qml owns
 // the single in-memory document (root.doc) and all persistence: views are dumb
 // renderers that call the intent functions here, which apply a pure op from
 // model.js, reassign root.doc (firing bindings) and schedule a debounced save
@@ -29,20 +29,29 @@ PlasmoidItem {
     readonly property string scriptPath:
         Qt.resolvedUrl("../code/store.sh").toString().replace(/^file:\/\//, "")
 
-    function resolveDataDir() {
-        var override = ("" + (Plasmoid.configuration.dataDirOverride || "")).trim();
-        if (override !== "") return override.replace(/^file:\/\//, "");
+    function dataBase() {
         var base = "" + StandardPaths.writableLocation(StandardPaths.GenericDataLocation);
         base = base.replace(/^file:\/\//, "");
         if (base.charAt(base.length - 1) === "/") base = base.substring(0, base.length - 1);
-        return base + "/conqrex/quicknotes";
+        return base;
     }
+    function resolveDataDir() {
+        var override = ("" + (Plasmoid.configuration.dataDirOverride || "")).trim();
+        if (override !== "") return override.replace(/^file:\/\//, "");
+        return dataBase() + "/conqrex/memokeel";
+    }
+    // pre-rename location, migrated from once on first run (see store.sh)
+    function legacyDataDir() { return dataBase() + "/conqrex/quicknotes"; }
     readonly property string dataDir: resolveDataDir()
+    readonly property bool hasDataDirOverride:
+        ("" + (Plasmoid.configuration.dataDirOverride || "")).trim() !== ""
 
     // POSIX single-quote escaping so any path/payload survives the shell
     function shq(s) { return "'" + ("" + s).replace(/'/g, "'\\''") + "'"; }
     function envPrefix() {
+        // An explicit data directory is authoritative: never migrate into it.
         return "QN_DATA_DIR=" + shq(dataDir)
+             + (hasDataDirOverride ? "" : " QN_MIGRATE_FROM=" + shq(legacyDataDir()))
              + " QN_BACKUP_COUNT=" + Plasmoid.configuration.backupCount
              + " QN_MAX_BYTES=" + (Plasmoid.configuration.maxAttachmentMB * 1048576) + " ";
     }
@@ -119,12 +128,22 @@ PlasmoidItem {
     }
 
     // ----- load -----------------------------------------------------------
+    property bool _migrationAnnounced: false
     function load() { exec.exec(storeCmd("init"), { kind: "load" }); }
 
     function applyLoaded(out, code) {
         var d;
         try { d = JSON.parse(out); } catch (e) { d = null; }
         if (!d || code !== 0) { d = Schema.defaultDoc(); }
+
+        // transport-only marker from store.sh: one toast, then drop it so the
+        // field never reaches the model or the document we save back.
+        var migratedFrom = ("" + (d.migratedFrom || "")).trim();
+        if (d.migratedFrom !== undefined) delete d.migratedFrom;
+        if (migratedFrom !== "" && !root._migrationAnnounced) {
+            root._migrationAnnounced = true;
+            root.statusMessage = i18n("Imported your notes from %1", migratedFrom);
+        }
 
         // first-run device id, persisted to both the doc and config
         if (!d.deviceId) {
@@ -335,7 +354,7 @@ PlasmoidItem {
     // ======================================================================
     //  Representations
     // ======================================================================
-    toolTipMainText: i18n("Quick Notes")
+    toolTipMainText: i18n("MemoKeel")
     toolTipSubText: {
         if (!loaded) return i18n("Loading…");
         var parts = [];
