@@ -1,12 +1,12 @@
 <p align="center">
-  <img src="assets/quick-notes-banner.png" alt="Conqrex Quick Notes" width="720">
+  <img src="assets/memokeel-banner.png" alt="MemoKeel" width="720">
 </p>
 
 <p align="center">
   <b>Capture. Organize. Get things done.</b><br>
   A professional, all-in-one quick-noting widget for KDE Plasma 6 —
-  notes, to-dos, kanban, reminders and search in one panel popup,
-  with your data safe in a single local JSON file.
+  a dashboard, notes, to-dos, kanban, reminders, tags and search in one
+  panel popup, with your data safe in a single local JSON file.
 </p>
 
 <p align="center">
@@ -18,6 +18,7 @@
 <p align="center">
   <a href="#-install">Install</a> ·
   <a href="#-features">Features</a> ·
+  <a href="#-keyboard-shortcuts">Shortcuts</a> ·
   <a href="#-quick-add-tokens">Quick-add</a> ·
   <a href="#-where-your-data-lives">Data</a> ·
   <a href="#-development">Development</a>
@@ -29,17 +30,21 @@
 
 |     |     |
 | --- | --- |
+| 🏠 **Dashboard** | The default tab: at-a-glance panes for recent notes, open to-dos and what's overdue or due today, each addable in place — no need to switch tabs. |
 | 📝 **Notes** | Markdown bodies (bold/italic/code/lists/links), inline `- [ ]` checklists, per-note neon colors, pin, archive, recoverable trash, Obsidian-style `[[wiki-links]]` with backlinks. |
 | ✅ **To-Do** | Status cycling (To Do → In Progress → Done), priorities, due dates, tags, quick-add. |
 | 📋 **Kanban** | Fit-to-width columns with WIP limits, positional drag & drop, card editor, per-column quick-add. |
 | ⏰ **Reminders** | Time-chip picker (In 1h · Tonight · Tomorrow · Custom calendar), repeats, native notifications, snooze, overdue badges. |
-| 🔎 **Search** | Global fuzzy search across everything + tag cloud; rename-safe tags filter every mode at once. |
+| 🔎 **Search** | Global fuzzy search across everything, toggled from the header (Ctrl+F) instead of a permanent bar. |
+| 🏷️ **Tags** | Every tag as a usage-scaled cloud; click to filter, right-click to rename, recolour or delete. |
 | 🖼 **Attachments** | Drag-drop images/files; content-addressed, deduplicated, reference-counted storage. |
 | 🧊 **Conqrex dark look** | Banner-style navy-neon theme out of the box; one toggle to follow your system theme. |
 | 🛟 **Data safety** | Atomic flock-serialized saves, rolling backups, crash-recovery journal, JSON/Markdown export, merge/replace import. |
 
-The panel icon shows live badges for **overdue reminders** and **open to-dos**,
-and its tooltip previews your next reminder.
+Navigation is a top tab bar (Dashboard, Notes, To-Do, Kanban\*, Reminders,
+Board\*, Search, Tags — \*optional, toggled in Settings). The panel icon
+shows live badges for **overdue reminders** and **open to-dos**, and its
+tooltip previews your next reminder.
 
 ## 📦 Install
 
@@ -49,7 +54,7 @@ cd Conqrex.QuickNotes
 ./install.sh            # installs or upgrades, per-user (no sudo)
 ```
 
-Right-click your desktop or panel → **Add Widgets** → search **Conqrex Quick Notes**.
+Right-click your desktop or panel → **Add Widgets** → search **MemoKeel**.
 
 <details>
 <summary>Reload Plasma after upgrading a local install</summary>
@@ -60,11 +65,37 @@ kquitapp6 plasmashell && kstart plasmashell
 
 </details>
 
-Package id: `com.conqrex.quicknotes`
+Package id: `com.conqrex.memokeel`
 
-## ⌨️ Quick-add tokens
+> **Upgrading from Quick Notes?** MemoKeel installs under a new package id
+> (`com.conqrex.memokeel`, was `com.conqrex.quicknotes`), so it does not
+> replace an existing Quick Notes applet in place — add it to your panel
+> once. Your notes migrate automatically the first time MemoKeel runs: the
+> old `~/.local/share/conqrex/quicknotes/` folder is copied into
+> `~/.local/share/conqrex/memokeel/` and left in place as a backup, nothing
+> is moved or deleted. Once MemoKeel is on your panel and your notes are
+> there, remove the superseded applet yourself with:
+> ```sh
+> kpackagetool6 -t Plasma/Applet -r com.conqrex.quicknotes
+> ```
 
-Type in the always-visible add bar:
+## ⌨️ Keyboard shortcuts
+
+Active while the popup (or desktop widget) is open:
+
+| Shortcut | Action |
+| --- | --- |
+| `Ctrl+1` through `Ctrl+7` | Jump to the tab in that position (matches what's actually on screen, so it shifts if Kanban/Board is off) |
+| `Ctrl+N` | Switch to Notes and focus the add field |
+| `Ctrl+T` | Switch to To-Do and focus the add field |
+| `Ctrl+K` | Switch to Kanban and focus the add field (only when Kanban is enabled) |
+| `Ctrl+R` | Switch to Reminders and focus the add field |
+| `Ctrl+F` | Toggle the search bar |
+| `Escape` | Unwind one layer at a time — overlays, then the search text, then the search bar |
+
+## 🔎 Quick-add tokens
+
+Type in an add bar (Dashboard panes, Notes, To-Do, Kanban):
 
 ```
 buy milk #home !2 ^tomorrow
@@ -83,7 +114,7 @@ instead of being applied.)
 Everything is one JSON document (plus an `attachments/` blob store) under:
 
 ```
-~/.local/share/conqrex/quicknotes/
+~/.local/share/conqrex/memokeel/
 ├── store.json        # the single source of truth
 ├── attachments/      # content-addressed image/file blobs
 ├── backups/          # rolling + pre-migration + pre-import snapshots
@@ -94,10 +125,11 @@ This is **outside the widget package**, so `kpackagetool6 -u` / reinstalls never
 touch your notes. Saves are flock-serialized and atomic (write-temp + fsync +
 rename) with a last-good journal, so an interrupted write can't corrupt your data.
 
-Use the widget's **⋮ (Data)** menu to **Export to JSON**, **Export notes to
-Markdown**, **Import** (merge or replace), **Back up now**, **Clean up unused
-attachments**, or **Open the data folder**. You can point the widget at a
-different folder in **Settings → Data directory**.
+Use the widget's **☰ (Data)** menu to **Export to JSON**, **Export notes to
+Markdown**, **Import** (merge or replace), **Back up now**, **Clean up
+attachments**, or **Open the data folder**. The **⋮ (More)** menu toggles
+**Show archived items**, opens **Trash**, and opens **Settings**, where you
+can point the widget at a different **Data directory**.
 
 > **Reminders** fire only while plasmashell is running; when you open the widget
 > it catches up on anything that came due while it was closed.
@@ -125,7 +157,7 @@ QT_LOGGING_RULES="qml.debug=true" plasmoidviewer -a ./package   # console.log
 Or, after installing:
 
 ```sh
-plasmawindowed com.conqrex.quicknotes
+plasmawindowed com.conqrex.memokeel
 ```
 
 ## 🏛 Architecture
@@ -144,14 +176,10 @@ bodies before producing RichText, so content can't inject markup.
 
 ## ⚠️ Known issues
 
-- **Two copies of the widget share one theme setting.** If you add Quick Notes
+- **Two copies of the widget share one theme setting.** If you add MemoKeel
   twice to the same Plasma session, the *Follow system theme* switch is not
   per-instance: flipping it in one copy re-themes both. Each copy still keeps
   its own notes, board and reminders.
-- **Upgrading keeps your old popup size.** Plasma remembers the popup dimensions
-  from the version you had before, so after an upgrade the Kanban board may still
-  overflow its columns. Drag the popup's edge once to resize it and the new size
-  sticks. Fresh installs get the new defaults of **32 × 30 grid units**.
 
 ## 📄 License
 
