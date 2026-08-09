@@ -94,7 +94,14 @@ ColumnLayout {
                         Layout.fillWidth: true
                         Layout.topMargin: Kirigami.Units.smallSpacing * 0.5
                         Rectangle { width: Kirigami.Units.gridUnit * 0.4; height: width; radius: width / 2; color: modelData.color }
-                        PlasmaComponents.Label { text: modelData.label + "  (" + rows.length + ")"; font.bold: true; color: T.QN.text }
+                        PlasmaComponents.Label {
+                            // Same string, same context as the dashboard's
+                            // SectionLabel, so both go through one translation.
+                            text: i18nc("@title reminder group with its item count", "%1 (%2)",
+                                        modelData.label, rows.length)
+                            font.bold: true
+                            color: T.QN.text
+                        }
                         Item { Layout.fillWidth: true }
                     }
 

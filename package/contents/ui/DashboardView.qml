@@ -42,18 +42,23 @@ ColumnLayout {
     // side there is room for the usual 6; stacked, every pane is full width
     // but competes for the same vertical scroll, so it is cut to 4.
     //
-    // That 4 is measured, not guessed (see package/contents/ui/_measure_harness.qml,
-    // run offscreen with PySide6): at the default popup size (32x30 gridUnit =
-    // 576x540px, gridUnit = 18px here), a to-do/reminder row is 53px, a pane's
-    // title row is 21px, a section label or "show more" row is 17px, and the
-    // dashboard's own row spacing is 2.4px. A stacked Due pane with one overdue
-    // section, one today section and a cap of 4 combined rows costs at most
-    // 21 (title) + 2x17 (section labels) + 4x53 (rows) + 17 (more link) + 6x2.4
-    // (gaps) ≈ 302px — comfortably inside the ~408px the popup leaves for the
-    // content area once its header, tab bar and footer chrome are subtracted
-    // from the 540px popup height, so the Due pane never needs scrolling into
-    // view. Six would have cost ≈ 21 + 2x17 + 6x53 + 17 + 6x2.4 ≈ 408px, right
-    // at the edge with no room to also see the start of the next pane.
+    // That 4 is measured, not guessed. Every figure below was read off the
+    // real components at the default popup size (32x30 gridUnit = 576x540px,
+    // with gridUnit = 18px and smallSpacing = 4px here) and can be re-derived
+    // by instantiating them and printing their implicitHeight:
+    //
+    //   TodoRow / ReminderRow carrying a due badge   56px
+    //   DashboardPane's title row                    22px
+    //   a section label or a "show more" line        15px  (one smallFont line)
+    //   this pane's own row spacing                   2.4px (smallSpacing * 0.6)
+    //   DashboardPane's title-to-body spacing         2px   (smallSpacing * 0.5)
+    //   the content area FullView leaves at 576x540  410px
+    //
+    // A stacked Due pane with an overdue section, a today section and a cap of
+    // 4 rows therefore costs 22 + 2 + 2x15 + 4x56 + 15 + 6x2.4 ≈ 307px — well
+    // inside 410, so the Due pane never has to be scrolled into view. Six rows
+    // would cost 22 + 2 + 2x15 + 6x56 + 15 + 8x2.4 ≈ 424px, over the 410 the
+    // popup actually has.
     readonly property int maxItems: view.stacked ? 4 : 6
 
     // Measured, not guessed. A to-do row's chrome (status circle, four action
@@ -123,12 +128,19 @@ ColumnLayout {
         var overdueCount = reminderBuckets.overdue.length + todoBuckets.overdue.length;
         var todayCount = reminderBuckets.today.length + todoBuckets.today.length;
         var total = overdueCount + todayCount;
-        var shown = overdueReminders.length + overdueTodos.length + todayReminders.length + todayTodos.length;
+        // The overflow is counted per kind, not as one number, because the two
+        // kinds have two different destination tabs: Reminders renders only
+        // doc.reminders and To-Do only doc.todos, so a single "show N more"
+        // could only ever be right about one of them.
+        var reminderExtra = (reminderBuckets.overdue.length + reminderBuckets.today.length)
+                          - (overdueReminders.length + todayReminders.length);
+        var todoExtra = (todoBuckets.overdue.length + todoBuckets.today.length)
+                      - (overdueTodos.length + todayTodos.length);
         return {
             overdueReminders: overdueReminders, overdueTodos: overdueTodos,
             todayReminders: todayReminders, todayTodos: todayTodos,
             overdueCount: overdueCount, todayCount: todayCount,
-            total: total, extra: total - shown
+            total: total, reminderExtra: reminderExtra, todoExtra: todoExtra
         };
     }
     readonly property var duePane: computeDuePane(view.buckets, view.todoDueBuckets)
@@ -157,8 +169,12 @@ ColumnLayout {
         id: more
         property int extra: 0
         property string mode: ""
+        // Panes whose overflow needs naming (the Due pane's, which is split by
+        // kind) pass their own wording; the rest take the generic one.
+        property string label: ""
         visible: extra > 0
-        text: i18np("Show %1 more", "Show %1 more", more.extra)
+        text: more.label !== "" ? more.label
+                                : i18np("Show one more", "Show %1 more", more.extra)
         font: Kirigami.Theme.smallFont
         color: moreHover.hovered ? view.accent : T.QN.textDim
         HoverHandler { id: moreHover; cursorShape: Qt.PointingHandCursor }
@@ -253,7 +269,12 @@ ColumnLayout {
                 // to-do counts here exactly like a reminder does.
                 tint: view.duePane.overdueCount > 0 ? Kirigami.Theme.negativeTextColor : view.accent
                 count: view.duePane.total
-                onTitleActivated: view.modeRequested("reminders")
+                // No destination: this pane's count merges reminders and
+                // to-dos, and no tab shows that union — Reminders would show
+                // strictly fewer items than the badge promises. The two
+                // kind-specific overflow links at the foot of the pane are the
+                // honest way out of it.
+                titleActivatable: false
                 bodyComponent: dueBody
             }
         }
@@ -433,13 +454,27 @@ ColumnLayout {
                 }
             }
 
-            // One link for the whole pane (FIX 4): the true remaining count
-            // across overdue+today, reminders+todos combined — not a separate
-            // (and previously doubled) count per section.
-            MoreLink {
-                Layout.alignment: Qt.AlignHCenter
-                extra: view.duePane.extra
-                mode: "reminders"
+            // One link per kind, each advertising exactly what its destination
+            // will show: the Reminders tab renders doc.reminders and the To-Do
+            // tab doc.todos, so a merged count on a single link would send the
+            // user somewhere that holds less than it promised.
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Kirigami.Units.smallSpacing * 1.5
+                Item { Layout.fillWidth: true }
+                MoreLink {
+                    extra: view.duePane.reminderExtra
+                    mode: "reminders"
+                    label: i18np("Show one more reminder", "Show %1 more reminders",
+                                 view.duePane.reminderExtra)
+                }
+                MoreLink {
+                    extra: view.duePane.todoExtra
+                    mode: "todo"
+                    label: i18np("Show one more to-do", "Show %1 more to-dos",
+                                 view.duePane.todoExtra)
+                }
+                Item { Layout.fillWidth: true }
             }
         }
     }

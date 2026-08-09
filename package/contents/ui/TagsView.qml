@@ -396,12 +396,22 @@ ColumnLayout {
                 color: T.QN.textDim
                 font: Kirigami.Theme.smallFont
                 // Deleting a tag is not just dropping a label from a list: it
-                // strips the tag off every item that carries it, archived ones
-                // included, so the confirmation says how many that is.
+                // strips the tag off every live item that carries it, archived
+                // ones included, so the confirmation says how many that is.
+                //
+                // KNOWN GAP: Model.deleteTag (code/model.js) walks notes,
+                // todos, cards and reminders only — it does not touch the
+                // copies parked in doc.trash, and Model.tagCounts (the source
+                // of `usage`) does not count them either. So a trashed item
+                // keeps the deleted tag id, and restoring it later resurfaces a
+                // reference to a tag that no longer exists. The wording below
+                // is therefore deliberately scoped to live items and never
+                // claims the tag is gone everywhere. Fixing it properly means
+                // changing model.js, which is frozen.
                 text: deleteDialog.usage === 0
-                      ? i18n("Nothing is tagged with it, so only the tag itself goes.")
-                      : i18np("It will be removed from %1 item — notes, to-dos, cards and reminders included.",
-                              "It will be removed from %1 items — notes, to-dos, cards and reminders included.",
+                      ? i18n("Nothing in your live notes, to-dos, cards or reminders is tagged with it, so only the tag itself goes.")
+                      : i18np("It will be removed from %1 live item — notes, to-dos, cards and reminders. Items already in the trash keep it.",
+                              "It will be removed from %1 live items — notes, to-dos, cards and reminders. Items already in the trash keep it.",
                               deleteDialog.usage)
             }
             RowLayout {

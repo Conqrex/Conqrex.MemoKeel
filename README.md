@@ -86,12 +86,19 @@ Active while the popup (or desktop widget) is open:
 | Shortcut | Action |
 | --- | --- |
 | `Ctrl+1` through `Ctrl+7` | Jump to the tab in that position (matches what's actually on screen, so it shifts if Kanban/Board is off) |
+| | *With both Kanban and Board enabled there are eight tabs, and the eighth — **Tags** — has no Ctrl number; reach it by clicking, or turn Board off so Tags moves into `Ctrl+7`.* |
 | `Ctrl+N` | Switch to Notes and focus the add field |
 | `Ctrl+T` | Switch to To-Do and focus the add field |
 | `Ctrl+K` | Switch to Kanban and focus the add field (only when Kanban is enabled) |
 | `Ctrl+R` | Switch to Reminders and focus the add field |
-| `Ctrl+F` | Toggle the search bar |
+| `Ctrl+F` | Toggle the search bar (on the tabs that filter: Notes, To-Do, Kanban, Reminders, Search) |
 | `Escape` | Unwind one layer at a time — overlays, then the search text, then the search bar |
+
+Search and the tag filter apply to Notes, To-Do, Kanban, Reminders and Search.
+Dashboard, Board and Tags show their own unfiltered content, so the search bar
+and the filter chips are hidden there; whatever you had set comes back when you
+return. While the bar is collapsed a live query is shown as a removable chip
+next to the title, so a filter is never applied invisibly.
 
 ## 🔎 Quick-add tokens
 
@@ -151,8 +158,14 @@ Live-preview the UI without installing (needs `plasma-sdk`):
 sudo pacman -S plasma-sdk
 plasmoidviewer -a ./package -f planar     -l floating    # desktop
 plasmoidviewer -a ./package -f horizontal -l topedge     # panel
-QT_LOGGING_RULES="qml.debug=true" plasmoidviewer -a ./package   # console.log
+QT_FORCE_STDERR_LOGGING=1 plasmoidviewer -a ./package    # console.log on stderr
 ```
+
+KDE installs a message handler that sends Qt/QML output to the journal, so
+without `QT_FORCE_STDERR_LOGGING=1` your terminal stays empty (and
+`QT_LOGGING_RULES="qml.debug=true"` on its own changes nothing — `console.log`
+is already enabled, it is just being routed elsewhere). Read it from the
+journal instead with `journalctl -f -o cat` if you prefer.
 
 Or, after installing:
 

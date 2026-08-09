@@ -21,6 +21,10 @@ ColumnLayout {
     property int count: 0
     property color tint: Kirigami.Theme.highlightColor
     property bool bodyScrolls: true
+    // A pane whose content has no single destination tab (the Due pane merges
+    // reminders and to-dos) sets this false: no chevron, no hover, no tap, no
+    // "Open …" tooltip, because there is nothing honest to open.
+    property bool titleActivatable: true
     property Component adder: null
     property Component bodyComponent: null
 
@@ -33,13 +37,13 @@ ColumnLayout {
         Layout.fillWidth: true
         implicitHeight: head.implicitHeight + Kirigami.Units.smallSpacing
         radius: T.QN.radiusS
-        color: titleHover.hovered ? T.QN.alpha(pane.tint, 0.12) : "transparent"
+        color: (pane.titleActivatable && titleHover.hovered) ? T.QN.alpha(pane.tint, 0.12) : "transparent"
         Behavior on color { ColorAnimation { duration: Kirigami.Units.shortDuration } }
 
-        HoverHandler { id: titleHover; cursorShape: Qt.PointingHandCursor }
-        TapHandler { onTapped: pane.titleActivated() }
+        HoverHandler { id: titleHover; enabled: pane.titleActivatable; cursorShape: Qt.PointingHandCursor }
+        TapHandler { enabled: pane.titleActivatable; onTapped: pane.titleActivated() }
         QQC2.ToolTip.text: i18n("Open %1", pane.title)
-        QQC2.ToolTip.visible: titleHover.hovered
+        QQC2.ToolTip.visible: pane.titleActivatable && titleHover.hovered
 
         RowLayout {
             id: head
@@ -78,6 +82,7 @@ ColumnLayout {
             }
             Kirigami.Icon {
                 source: "go-next"
+                visible: pane.titleActivatable
                 color: pane.tint
                 opacity: titleHover.hovered ? 0.9 : 0.35
                 Layout.preferredWidth: Kirigami.Units.iconSizes.small
