@@ -1,25 +1,68 @@
-# Conqrex Quick Notes
+<p align="center">
+  <img src="package/contents/icons/quick-notes-banner.png" alt="Conqrex Quick Notes" width="720">
+</p>
 
-A professional, all-in-one quick-noting widget for **KDE Plasma 6**, in the same
-neon-glass style as the Conqrex gauge widget. One widget, several modes:
+<p align="center">
+  <b>Capture. Organize. Get things done.</b><br>
+  A professional, all-in-one quick-noting widget for KDE Plasma 6 —
+  notes, to-dos, kanban, reminders and search in one panel popup,
+  with your data safe in a single local JSON file.
+</p>
 
-- **📝 Notes** — Markdown bodies (bold/italic/code/lists/links), inline checklists
-  (`- [ ]`), per-note neon colors, pin to top, archive, and a recoverable trash.
-  Obsidian-style `[[wiki-links]]` with a backlinks panel.
-- **✅ To-Do** — status cycling (To Do → In Progress → Done), priorities, due dates,
-  tags and quick-add.
-- **📋 Kanban** — columns with WIP limits, drag a card between columns (or use its
-  menu), priorities, due dates, tags and per-column quick-add.
-- **⏰ Reminders** — due date + repeat (daily/weekly/monthly), **native desktop
-  notifications** while the panel runs, snooze/acknowledge, and overdue badges.
-- **🔎 Search** — global fuzzy search across notes, to-dos, cards and reminders,
-  plus a tag cloud. **Tags** are rename-safe and filter every mode at once.
-- **🖼 Attachments** — drag-drop or pick image/files; stored content-addressed
-  (deduplicated, reference-counted) under your data dir.
+<p align="center">
+  <img src="https://img.shields.io/badge/License-MIT-3b82f6?style=flat-square" alt="MIT License">
+  <img src="https://img.shields.io/badge/KDE-Plasma%206-1d99f3?style=flat-square&logo=kde&logoColor=white" alt="KDE Plasma 6">
+  <img src="https://img.shields.io/badge/Made%20with-QML-41cd52?style=flat-square&logo=qt&logoColor=white" alt="QML">
+</p>
 
-The panel icon shows live badges for **overdue reminders** and **open to-dos**.
+<p align="center">
+  <a href="#-install">Install</a> ·
+  <a href="#-features">Features</a> ·
+  <a href="#-quick-add-tokens">Quick-add</a> ·
+  <a href="#-where-your-data-lives">Data</a> ·
+  <a href="#-development">Development</a>
+</p>
 
-## Quick-add tokens
+---
+
+## ✨ Features
+
+|     |     |
+| --- | --- |
+| 📝 **Notes** | Markdown bodies (bold/italic/code/lists/links), inline `- [ ]` checklists, per-note neon colors, pin, archive, recoverable trash, Obsidian-style `[[wiki-links]]` with backlinks. |
+| ✅ **To-Do** | Status cycling (To Do → In Progress → Done), priorities, due dates, tags, quick-add. |
+| 📋 **Kanban** | Fit-to-width columns with WIP limits, positional drag & drop, card editor, per-column quick-add. |
+| ⏰ **Reminders** | Time-chip picker (In 1h · Tonight · Tomorrow · Custom calendar), repeats, native notifications, snooze, overdue badges. |
+| 🔎 **Search** | Global fuzzy search across everything + tag cloud; rename-safe tags filter every mode at once. |
+| 🖼 **Attachments** | Drag-drop images/files; content-addressed, deduplicated, reference-counted storage. |
+| 🧊 **Conqrex dark look** | Banner-style navy-neon theme out of the box; one toggle to follow your system theme. |
+| 🛟 **Data safety** | Atomic flock-serialized saves, rolling backups, crash-recovery journal, JSON/Markdown export, merge/replace import. |
+
+The panel icon shows live badges for **overdue reminders** and **open to-dos**,
+and its tooltip previews your next reminder.
+
+## 📦 Install
+
+```sh
+git clone <repo-url>
+cd Conqrex.QuickNotes
+./install.sh            # installs or upgrades, per-user (no sudo)
+```
+
+Right-click your desktop or panel → **Add Widgets** → search **Conqrex Quick Notes**.
+
+<details>
+<summary>Reload Plasma after upgrading a local install</summary>
+
+```sh
+kquitapp6 plasmashell && kstart plasmashell
+```
+
+</details>
+
+Package id: `com.conqrex.quicknotes`
+
+## ⌨️ Quick-add tokens
 
 Type in the always-visible add bar:
 
@@ -31,21 +74,11 @@ buy milk #home !2 ^tomorrow
 - `!1`–`!4` or `!low` `!med` `!high` `!urgent` — priority
 - `^today` `^tomorrow` `^3h` `^2d` `^14:30` — due date
 
-## Install
+Tokens are optional power-user shortcuts; Reminders has a visual time picker.
+(Reminders have no priority field, so a `!` token there is left in the text
+instead of being applied.)
 
-```sh
-./install.sh            # installs or upgrades, per-user (no sudo)
-```
-
-Then right-click your desktop or panel → **Add Widgets** → search **Conqrex Quick Notes**.
-
-After changing the code, reload the shell to pick it up:
-
-```sh
-kquitapp6 plasmashell && kstart plasmashell
-```
-
-## Where your data lives
+## 🗃 Where your data lives
 
 Everything is one JSON document (plus an `attachments/` blob store) under:
 
@@ -69,7 +102,7 @@ different folder in **Settings → Data directory**.
 > **Reminders** fire only while plasmashell is running; when you open the widget
 > it catches up on anything that came due while it was closed.
 
-## Develop / preview
+## 🛠️ Development
 
 The data layer is a plain shell broker you can drive directly:
 
@@ -95,7 +128,7 @@ Or, after installing:
 plasmawindowed com.conqrex.quicknotes
 ```
 
-## Architecture
+## 🏛 Architecture
 
 `main.qml` owns the entire in-memory document (`root.doc`). The views are dumb
 renderers that call intent functions, which apply a **pure operation** from
@@ -104,6 +137,11 @@ save. **`code/store.sh` is the only thing that touches the filesystem**, invoked
 through a single `Plasma5Support.DataSource`. Markdown rendering HTML-escapes note
 bodies before producing RichText, so content can't inject markup.
 
-## License
+## 🐙 Sibling projects
+
+[**Conqrex.OctoPulse**](https://github.com/Conqrex/Conqrex.OctoPulse) — every GitHub Actions run in one panel widget.
+[**Conqrex.Dockswain**](https://github.com/Conqrex/Conqrex.Dockswain) — manage Docker hosts over SSH from your panel.
+
+## 📄 License
 
 MIT © S. Aydin Icen
