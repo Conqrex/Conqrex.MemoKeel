@@ -8,3 +8,4 @@
 # local test data / scratch stores
 /tmp-store/
 *.local.json
+.superpowers/
