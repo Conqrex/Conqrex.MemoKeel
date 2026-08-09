@@ -14,8 +14,6 @@ Item {
     property string currentMode: "dashboard"
     property int overdue: 0
     property int openTodos: 0
-    // labels off, icons only (FullView drives this from the available width)
-    property bool compact: false
     property bool enableKanban: true
     property bool enableBoard: false
     property color accent: Kirigami.Theme.highlightColor
@@ -56,22 +54,17 @@ Item {
     }
 
     // ---- metrics -----------------------------------------------------------
-    // Horizontal padding is deliberately tight: with it at 1.5×smallSpacing the
-    // labelled strip needs ~33 grid units, which is wider than the default
-    // popup, so the default configuration would always fall back to icons.
-    readonly property real hPad: Kirigami.Units.smallSpacing
+    // Expanded-active-tab presentation: every tab is an icon, and only the
+    // active one also renders its label. That fits at any popup width, so
+    // there is no width measurement and no icons-only breakpoint to compute —
+    // the label font and padding are the rail's normal ones again.
+    readonly property real hPad: Kirigami.Units.smallSpacing * 1.5
     readonly property real gap: Kirigami.Units.smallSpacing
     readonly property real iconSize: Kirigami.Units.iconSizes.smallMedium
     readonly property real itemHeight: Kirigami.Units.gridUnit * 2.1
 
-    // Width the strip needs with every label shown, measured from real Labels
-    // in the current font (bold, as the active tab renders) rather than from a
-    // hardcoded grid-unit guess. FullView compares its own width against this,
-    // so `compact` flips exactly when a label would start to elide.
-    readonly property real expandedWidth: metricsRow.implicitWidth + Kirigami.Units.smallSpacing * 2
-
     implicitHeight: itemHeight + Kirigami.Units.smallSpacing
-    implicitWidth: expandedWidth
+    implicitWidth: tabRow.width + Kirigami.Units.smallSpacing
 
     activeFocusOnTab: true
     Keys.onLeftPressed: tabs.step(-1)
@@ -88,26 +81,6 @@ Item {
             flick.contentX = it.x;
         else if (it.x + it.width > flick.contentX + flick.width)
             flick.contentX = Math.max(0, it.x + it.width - flick.width);
-    }
-
-    // Invisible measuring row: one entry per mode at its full labelled width.
-    Row {
-        id: metricsRow
-        visible: false
-        spacing: tabs.gap
-        Repeater {
-            model: tabs.modes
-            delegate: Item {
-                required property var modelData
-                implicitWidth: tabs.hPad * 2 + tabs.iconSize + tabs.gap + metricLabel.implicitWidth
-                implicitHeight: 1
-                PlasmaComponents.Label {
-                    id: metricLabel
-                    text: modelData.label
-                    font: Kirigami.Theme.smallFont
-                }
-            }
-        }
     }
 
     Rectangle {
@@ -146,8 +119,9 @@ Item {
                     readonly property bool active: tabs.currentMode === modelData.id
 
                     width: tabs.hPad * 2 + tabs.iconSize
-                           + (tabs.compact ? 0 : tabs.gap + label.implicitWidth)
+                           + (active ? tabs.gap + label.implicitWidth : 0)
                     height: tabs.itemHeight
+                    clip: true
                     anchors.verticalCenter: parent.verticalCenter
                     radius: Kirigami.Units.smallSpacing
                     color: active ? Qt.rgba(tabs.accent.r, tabs.accent.g, tabs.accent.b, 0.18)
@@ -243,27 +217,29 @@ Item {
                                 }
                             }
                         }
+                        // Only the active tab is labelled — the accent-coloured
+                        // label is one more active cue on top of the pill and
+                        // the stripe, and inactive tabs stay icon-width so the
+                        // strip fits at any popup width and in any language.
                         PlasmaComponents.Label {
                             id: label
-                            visible: !tabs.compact
+                            visible: item.active
                             anchors.verticalCenter: parent.verticalCenter
                             text: item.modelData.label
-                            color: item.active ? tabs.accent : T.QN.textDim
-                            // The accent pill, stripe and colour already carry
-                            // the active state; keeping one weight for every
-                            // tab keeps the strip's width stable as the
-                            // selection moves, and matches the metrics row.
-                            font: Kirigami.Theme.smallFont
+                            color: tabs.accent
                         }
                     }
 
                     HoverHandler { id: hover }
                     TapHandler { onTapped: tabs.modeSelected(item.modelData.id) }
 
+                    // Every tab gets a tooltip; only the first seven can carry a
+                    // Ctrl-number hint, because only those have a shortcut.
                     PlasmaComponents.ToolTip {
-                        text: tabs.compact ? item.modelData.label
-                                           : i18n("%1 (Ctrl+%2)", item.modelData.label, item.index + 1)
-                        visible: hover.hovered && (tabs.compact || item.index < 7)
+                        text: item.index < 7
+                              ? i18n("%1 (Ctrl+%2)", item.modelData.label, item.index + 1)
+                              : item.modelData.label
+                        visible: hover.hovered
                     }
                 }
             }

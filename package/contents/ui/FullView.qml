@@ -29,9 +29,14 @@ Item {
                                                      Kirigami.Theme.highlightColor)
 
     property string currentMode: "dashboard"
-    // The search *bar* is a collapsible filter over every mode; the Search
-    // *tab* is a mode of its own and works whether or not the bar is showing.
-    property bool searchVisible: false
+    // The search *bar* is a collapsible filter over every mode. The Search
+    // *tab* has no field of its own, so the bar is pinned open while that tab
+    // is active — otherwise the tab would be a dead end with nothing to type
+    // into. `searchRequested` is the user's explicit toggle; `searchVisible`
+    // stays a pure binding so the toggle button can bind to it safely.
+    property bool searchRequested: false
+    readonly property bool searchPinned: full.currentMode === "search"
+    readonly property bool searchVisible: full.searchRequested || full.searchPinned
     property string searchText: ""
     property string tagFilter: ""
     property string editingNoteId: ""
@@ -64,10 +69,33 @@ Item {
 
     Component.onCompleted: {
         if (controller) full.currentMode = Plasmoid.configuration.lastMode || "dashboard";
+        // The stored mode may name a tab the user has since switched off.
+        full.ensureModeAvailable();
         if (popupOpen) full.everOpened = true;
         full.drainPendingStatus();
     }
-    onCurrentModeChanged: if (controller && currentMode !== "search") Plasmoid.configuration.lastMode = currentMode
+    onCurrentModeChanged: {
+        if (controller && full.currentMode !== "search") Plasmoid.configuration.lastMode = full.currentMode;
+        // The Search tab's only input is the shared bar above it.
+        if (full.currentMode === "search") searchBar.focusField();
+    }
+
+    // The tab model drops the modes the user turned off, so it is the authority
+    // on what may be shown — both for the mode restored at startup and for a
+    // mode that disappears because Kanban/Board was switched off while open.
+    function defaultTabMode() {
+        var d = controller ? ("" + Plasmoid.configuration.defaultMode) : "";
+        if (d !== "" && tabBar.indexOfMode(d) >= 0) return d;
+        if (tabBar.indexOfMode("dashboard") >= 0) return "dashboard";
+        return tabBar.modeAt(0);
+    }
+    function ensureModeAvailable() {
+        if (tabBar.indexOfMode(full.currentMode) < 0) full.selectMode(full.defaultTabMode());
+    }
+    Connections {
+        target: tabBar
+        function onModesChanged() { full.ensureModeAvailable(); }
+    }
 
     // surface controller status messages as toasts
     Connections {
@@ -137,9 +165,18 @@ Item {
         else quickAdd.focusField();
     }
 
-    function showSearch() { full.searchVisible = true; searchBar.focusField(); }
-    function hideSearch() { searchBar.clear(); full.searchVisible = false; }
-    function toggleSearch() { if (full.searchVisible) full.hideSearch(); else full.showSearch(); }
+    function showSearch() { full.searchRequested = true; searchBar.focusField(); }
+    // Collapsing is not "cancel": the query survives, so re-opening the bar
+    // (or landing on the Search tab) shows what the user last typed. Only
+    // Escape clears the text, and only as its own separate step.
+    function hideSearch() { full.searchRequested = false; }
+    function toggleSearch() {
+        // On the Search tab the bar cannot be collapsed, so the toggle just
+        // puts the caret back in it — without arming `searchRequested`, which
+        // would leave the bar open after the user moves to another tab.
+        if (full.searchPinned) { searchBar.focusField(); return; }
+        if (full.searchVisible) full.hideSearch(); else full.showSearch();
+    }
 
     // Escape unwinds one layer at a time: overlays first, then the search text,
     // then the search bar itself.
@@ -148,7 +185,7 @@ Item {
         if (full.editingCardId !== "") { full.editingCardId = ""; return; }
         if (full.editingNoteId !== "") { full.editingNoteId = ""; return; }
         if (full.searchText !== "") { searchBar.clear(); return; }
-        if (full.searchVisible) full.searchVisible = false;
+        if (full.searchRequested && !full.searchPinned) full.searchRequested = false;
     }
 
     // Qt.WindowShortcut keeps these scoped to the window this view lives in.
@@ -175,7 +212,8 @@ Item {
         context: Qt.WindowShortcut
         enabled: full.shortcutsActive
                  && (full.showTrash || full.editingCardId !== "" || full.editingNoteId !== ""
-                     || full.searchText !== "" || full.searchVisible)
+                     || full.searchText !== ""
+                     || (full.searchRequested && !full.searchPinned))
         onActivated: full.handleEscape()
     }
     Shortcut { sequence: "Ctrl+1"; context: Qt.WindowShortcut; enabled: full.shortcutsActive && tabBar.modeAt(0) !== ""; onActivated: full.selectTabIndex(0) }
@@ -239,8 +277,9 @@ Item {
                 Layout.preferredHeight: Kirigami.Units.iconSizes.medium
             }
             Kirigami.Heading { level: 3; text: i18n("MemoKeel"); color: T.QN.text }
-            Item { Layout.fillWidth: true }
 
+            // The active tag filter belongs beside the title, not out with the
+            // badges — so the spacer comes after it.
             QN.TagChip {
                 visible: full.tagFilter !== "" && full.doc && full.doc.tags[full.tagFilter]
                 tagName: full.tagName(full.tagFilter)
@@ -251,6 +290,8 @@ Item {
                 onRemoveClicked: full.tagFilter = ""
                 onClicked: full.tagFilter = ""
             }
+
+            Item { Layout.fillWidth: true }
 
             // overdue reminders — jumps to the Reminders tab
             QQC2.ToolButton {
@@ -285,9 +326,13 @@ Item {
             QQC2.ToolButton {
                 icon.name: "search"
                 flat: true
-                checkable: true
+                // Deliberately NOT checkable: a checkable button owns `checked`
+                // and would fight the binding below. Here `checked` is a pure
+                // one-way read of the state, and the click only ever changes
+                // the state, so the two can never disagree.
+                checkable: false
                 checked: full.searchVisible
-                onToggled: checked ? full.showSearch() : full.hideSearch()
+                onClicked: full.toggleSearch()
                 QQC2.ToolTip.text: i18n("Search (Ctrl+F)")
                 QQC2.ToolTip.visible: hovered
             }
@@ -300,12 +345,22 @@ Item {
                 QQC2.Menu {
                     id: moreMenu
                     QQC2.MenuItem {
+                        id: archivedItem
                         text: i18n("Show archived items")
                         icon.name: "archive-insert"
+                        // Checkable, because a menu entry needs its check mark —
+                        // so `checked` is held by a Binding rather than an inline
+                        // one, and the handler writes the config, never `checked`.
+                        // The config is the single source both mirrors read.
                         checkable: true
-                        checked: Plasmoid.configuration.showArchived
                         enabled: full.hasDoc
-                        onTriggered: Plasmoid.configuration.showArchived = checked
+                        onTriggered: Plasmoid.configuration.showArchived = !Plasmoid.configuration.showArchived
+                        Binding {
+                            target: archivedItem
+                            property: "checked"
+                            value: Plasmoid.configuration.showArchived
+                            restoreMode: Binding.RestoreBindingOrValue
+                        }
                     }
                     QQC2.MenuItem {
                         text: i18n("Trash (%1)", full.doc ? full.doc.trash.length : 0)
@@ -333,10 +388,6 @@ Item {
             accent: full.accent
             enableKanban: Plasmoid.configuration.enableKanban
             enableBoard: Plasmoid.configuration.enableBoard
-            // `expandedWidth` is the strip's own measurement of the width its
-            // labels need in the current font, so labels drop exactly when
-            // they would otherwise start eliding — no hardcoded breakpoint.
-            compact: width < tabBar.expandedWidth
             onModeSelected: (m) => full.selectMode(m)
         }
 
@@ -425,10 +476,13 @@ Item {
             QQC2.ToolButton {
                 icon.name: "archive-insert"
                 flat: true
-                checkable: true
+                // Same reasoning as the search toggle: `checked` is a pure read
+                // of the config, the click only writes the config, so this
+                // button and the ⋮ menu entry can never drift apart.
+                checkable: false
                 enabled: full.hasDoc
                 checked: Plasmoid.configuration.showArchived
-                onToggled: Plasmoid.configuration.showArchived = checked
+                onClicked: Plasmoid.configuration.showArchived = !Plasmoid.configuration.showArchived
                 QQC2.ToolTip.text: i18n("Show archived items")
                 QQC2.ToolTip.visible: hovered
             }
