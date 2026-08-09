@@ -191,7 +191,7 @@ Item {
             placeholder: {
                 switch (full.currentMode) {
                 case "todo": return i18n("Add a task…  #tag !priority ^due");
-                case "kanban": return i18n("Add a card…  #tag !priority");
+                case "kanban": return i18n("Add a card…  #tag !priority ^due");
                 default: return i18n("Add a note…  #tag");
                 }
             }
