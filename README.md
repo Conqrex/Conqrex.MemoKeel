@@ -48,6 +48,14 @@ tooltip previews your next reminder.
 
 ## 📦 Install
 
+### Arch / CachyOS (AUR)
+
+```sh
+yay -S memokeel
+```
+
+### From source
+
 ```sh
 git clone https://github.com/Conqrex/Conqrex.MemoKeel.git
 cd Conqrex.MemoKeel
