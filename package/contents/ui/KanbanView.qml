@@ -26,7 +26,34 @@ Item {
     signal editRequested(string id)
 
     readonly property var doc: controller ? controller.doc : null
-    readonly property var columns: doc ? doc.columns.slice().sort(function (a, b) { return (a.order || 0) - (b.order || 0); }) : []
+    readonly property var boards: doc ? Model.boardsSorted(doc) : []
+    readonly property string activeBoardId: {
+        if (!doc || boards.length === 0) return "";
+        var wanted = doc.ui ? (doc.ui.activeKanbanBoardId || "") : "";
+        for (var i = 0; i < boards.length; i++) if (boards[i].id === wanted) return wanted;
+        return boards[0].id;
+    }
+    readonly property var activeBoard: {
+        for (var i = 0; i < boards.length; i++) if (boards[i].id === activeBoardId) return boards[i];
+        return null;
+    }
+    readonly property var columns: doc && activeBoardId ? Model.columnsOf(doc, activeBoardId) : []
+
+    function createStarterColumns(boardId) {
+        if (!boardId) return;
+        kroot.controller.addColumn(boardId, { title: i18n("To Do"), order: 1 });
+        kroot.controller.addColumn(boardId, { title: i18n("In Progress"), order: 2, color: "amber" });
+        kroot.controller.addColumn(boardId, { title: i18n("Done"), order: 3, color: "lime" });
+    }
+
+    function cardCount(boardId) {
+        if (!doc) return 0;
+        var ids = {};
+        for (var i = 0; i < doc.columns.length; i++) if (doc.columns[i].boardId === boardId) ids[doc.columns[i].id] = true;
+        var count = 0;
+        for (var j = 0; j < doc.cards.length; j++) if (ids[doc.cards[j].columnId] && !doc.cards[j].archived) count++;
+        return count;
+    }
 
     function colCards(colId) {
         if (!doc) return [];
@@ -36,33 +63,206 @@ Item {
         return list;
     }
 
-    // empty board
+    // no project boards yet
     QN.EmptyState {
         anchors.centerIn: parent
         width: parent.width
-        visible: kroot.columns.length === 0
+        visible: kroot.boards.length === 0
         icon: "view-calendar-tasks"
-        title: i18n("No board yet")
-        hint: i18n("Create a starter board to organize cards into columns.")
+        title: i18n("No project boards yet")
+        hint: i18n("Create a separate Kanban for each project.")
     }
     QQC2.Button {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.verticalCenter: parent.verticalCenter
         anchors.verticalCenterOffset: Kirigami.Units.gridUnit * 4
-        visible: kroot.columns.length === 0
+        visible: kroot.boards.length === 0
         icon.name: "list-add"
         text: i18n("Create board")
         highlighted: true
-        onClicked: {
-            kroot.controller.addColumn({ title: i18n("To Do"), order: 1 });
-            kroot.controller.addColumn({ title: i18n("In Progress"), order: 2, color: "amber" });
-            kroot.controller.addColumn({ title: i18n("Done"), order: 3, color: "lime" });
+        onClicked: boardEditorDialog.showFor("", "")
+    }
+
+    // Project navigation is one bounded surface: board tabs carry their own
+    // count and menu, while creation remains a clear primary action.
+    Rectangle {
+        id: boardBar
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        height: visible ? Kirigami.Units.gridUnit * 2.6 : 0
+        visible: kroot.boards.length > 0
+        radius: T.QN.radiusM
+        color: T.QN.inputBg
+        border.width: 1
+        border.color: T.QN.border
+
+        RowLayout {
+            anchors.fill: parent
+            anchors.margins: Kirigami.Units.smallSpacing * 0.65
+            spacing: Kirigami.Units.smallSpacing
+
+            Kirigami.Icon {
+                source: "project-development"
+                color: kroot.accent
+                Layout.preferredWidth: Kirigami.Units.iconSizes.small
+                Layout.preferredHeight: Kirigami.Units.iconSizes.small
+                Layout.leftMargin: Kirigami.Units.smallSpacing * 0.5
+            }
+
+            Flickable {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                contentWidth: boardRow.width
+                contentHeight: height
+                clip: true
+                boundsBehavior: Flickable.StopAtBounds
+
+                Row {
+                    id: boardRow
+                    height: parent.height
+                    spacing: Kirigami.Units.smallSpacing * 0.7
+                    Repeater {
+                        model: kroot.boards
+                        delegate: Rectangle {
+                            id: boardTab
+                            required property var modelData
+                            readonly property bool active: kroot.activeBoardId === modelData.id
+                            readonly property int count: kroot.cardCount(modelData.id)
+
+                            height: boardRow.height
+                            width: tabContent.implicitWidth + Kirigami.Units.smallSpacing * 2.4
+                            radius: T.QN.radiusS
+                            color: active ? T.QN.alpha(kroot.accent, 0.14)
+                                          : (tabHover.hovered ? T.QN.surfaceHi : "transparent")
+                            border.width: 1
+                            border.color: active ? T.QN.alpha(kroot.accent, 0.45) : "transparent"
+                            Behavior on color { ColorAnimation { duration: Kirigami.Units.shortDuration } }
+                            Behavior on border.color { ColorAnimation { duration: Kirigami.Units.shortDuration } }
+
+                            RowLayout {
+                                id: tabContent
+                                anchors.centerIn: parent
+                                spacing: Kirigami.Units.smallSpacing * 0.7
+
+                                PlasmaComponents.Label {
+                                    text: boardTab.modelData.title
+                                    font.bold: boardTab.active
+                                    color: boardTab.active ? T.QN.text : T.QN.textDim
+                                    elide: Text.ElideRight
+                                    Layout.maximumWidth: Kirigami.Units.gridUnit * 10
+                                }
+                                Rectangle {
+                                    Layout.preferredWidth: Math.max(Kirigami.Units.gridUnit * 1.15, countLabel.implicitWidth + Kirigami.Units.smallSpacing * 1.2)
+                                    Layout.preferredHeight: Kirigami.Units.gridUnit * 1.15
+                                    radius: height / 2
+                                    color: boardTab.active ? T.QN.alpha(kroot.accent, 0.22) : T.QN.surfaceHi
+                                    PlasmaComponents.Label {
+                                        id: countLabel
+                                        anchors.centerIn: parent
+                                        text: boardTab.count
+                                        font: Kirigami.Theme.smallFont
+                                        color: boardTab.active ? kroot.accent : T.QN.textFaint
+                                    }
+                                }
+                                QQC2.ToolButton {
+                                    id: boardMenuButton
+                                    visible: boardTab.active
+                                    Layout.preferredWidth: Kirigami.Units.gridUnit * 1.45
+                                    Layout.preferredHeight: Kirigami.Units.gridUnit * 1.45
+                                    icon.name: "overflow-menu"
+                                    flat: true
+                                    onClicked: boardMenu.open()
+                                    QQC2.ToolTip.text: i18n("Board actions")
+                                    QQC2.ToolTip.visible: hovered
+                                    QQC2.Menu {
+                                        id: boardMenu
+                                        QQC2.MenuItem {
+                                            icon.name: "edit-rename"
+                                            text: i18n("Rename board")
+                                            onTriggered: boardEditorDialog.showFor(boardTab.modelData.id, boardTab.modelData.title)
+                                        }
+                                        QQC2.MenuSeparator {}
+                                        QQC2.MenuItem {
+                                            icon.name: "edit-delete"
+                                            text: i18n("Move board to Trash")
+                                            onTriggered: deleteBoardDialog.showFor(boardTab.modelData.id,
+                                                                                   boardTab.modelData.title,
+                                                                                   boardTab.count)
+                                        }
+                                    }
+                                }
+                            }
+
+                            HoverHandler { id: tabHover; cursorShape: Qt.PointingHandCursor }
+                            TapHandler {
+                                enabled: !boardMenuButton.hovered
+                                onTapped: kroot.controller.setActiveKanbanBoard(boardTab.modelData.id)
+                            }
+                        }
+                    }
+                }
+            }
+
+            QQC2.Button {
+                id: newBoardButton
+                Layout.fillHeight: true
+                Layout.minimumWidth: Kirigami.Units.gridUnit * 7
+                Layout.preferredWidth: Kirigami.Units.gridUnit * 7
+                icon.name: "list-add"
+                text: i18n("New board")
+                flat: true
+                onClicked: boardEditorDialog.showFor("", "")
+                contentItem: RowLayout {
+                    spacing: Kirigami.Units.smallSpacing
+                    Kirigami.Icon {
+                        source: "list-add"
+                        color: kroot.accent
+                        Layout.preferredWidth: Kirigami.Units.iconSizes.small
+                        Layout.preferredHeight: Kirigami.Units.iconSizes.small
+                    }
+                    PlasmaComponents.Label {
+                        text: i18n("New board")
+                        color: T.QN.text
+                    }
+                }
+                background: Rectangle {
+                    radius: T.QN.radiusS
+                    color: newBoardButton.hovered ? T.QN.alpha(kroot.accent, 0.14) : "transparent"
+                    border.width: 1
+                    border.color: newBoardButton.hovered ? T.QN.alpha(kroot.accent, 0.4) : T.QN.border
+                    Behavior on color { ColorAnimation { duration: Kirigami.Units.shortDuration } }
+                }
+            }
         }
+    }
+
+    QN.EmptyState {
+        anchors.centerIn: parent
+        width: parent.width
+        visible: kroot.boards.length > 0 && kroot.columns.length === 0
+        icon: "view-calendar-tasks"
+        title: kroot.activeBoard ? i18n("%1 is empty", kroot.activeBoard.title) : i18n("Empty board")
+        hint: i18n("Add the starter workflow or create a custom column.")
+    }
+    QQC2.Button {
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.verticalCenter: parent.verticalCenter
+        anchors.verticalCenterOffset: Kirigami.Units.gridUnit * 4
+        visible: kroot.boards.length > 0 && kroot.columns.length === 0
+        icon.name: "list-add"
+        text: i18n("Add starter columns")
+        highlighted: true
+        onClicked: kroot.createStarterColumns(kroot.activeBoardId)
     }
 
     Flickable {
         id: hflick
-        anchors.fill: parent
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: boardBar.bottom
+        anchors.bottom: parent.bottom
+        anchors.topMargin: boardBar.visible ? Kirigami.Units.smallSpacing : 0
         visible: kroot.columns.length > 0
         contentWidth: colRow.width
         contentHeight: height
@@ -294,6 +494,8 @@ Item {
                                 controller: kroot.controller
                                 cardData: modelData
                                 columns: kroot.columns
+                                boards: kroot.boards
+                                boardId: kroot.activeBoardId
                                 tagsMap: kroot.doc ? kroot.doc.tags : ({})
                                 nowMs: kroot.nowMs
                                 use24h: kroot.use24h
@@ -352,11 +554,194 @@ Item {
                 border.color: addHover.hovered ? T.QN.borderHi : T.QN.border
                 Kirigami.Icon { anchors.centerIn: parent; source: "list-add"; opacity: addHover.hovered ? 1 : 0.5 }
                 HoverHandler { id: addHover }
-                TapHandler { onTapped: kroot.controller.addColumn({ title: i18n("New column") }) }
+                TapHandler { onTapped: kroot.controller.addColumn(kroot.activeBoardId, { title: i18n("New column") }) }
             }
         }
     }
 
     // shared drag layer so a dragged card floats above all columns
     Item { id: cardDragLayer; anchors.fill: parent; z: 999 }
+
+    QQC2.Dialog {
+        id: boardEditorDialog
+        property string boardId: ""
+        readonly property bool editing: boardId !== ""
+
+        function showFor(id, title) {
+            boardId = id || "";
+            boardNameField.text = title || "";
+            open();
+        }
+
+        modal: true
+        dim: true
+        anchors.centerIn: parent
+        width: Math.min(kroot.width - Kirigami.Units.gridUnit * 2, Kirigami.Units.gridUnit * 20)
+        padding: Kirigami.Units.largeSpacing
+        closePolicy: QQC2.Popup.CloseOnEscape
+        onOpened: boardNameField.forceActiveFocus()
+        onAccepted: {
+            var title = boardNameField.text.trim();
+            if (!title) return;
+            if (editing) {
+                kroot.controller.updateItem("boards", boardId, { title: title });
+            } else {
+                var id = kroot.controller.addBoard({ title: title });
+                kroot.createStarterColumns(id);
+            }
+        }
+        background: Rectangle {
+            radius: T.QN.radiusL
+            color: T.QN.surface
+            border.width: 1
+            border.color: T.QN.alpha(kroot.accent, 0.4)
+        }
+        contentItem: ColumnLayout {
+            spacing: Kirigami.Units.largeSpacing
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Kirigami.Units.smallSpacing
+                Rectangle {
+                    Layout.preferredWidth: Kirigami.Units.gridUnit * 2
+                    Layout.preferredHeight: width
+                    radius: T.QN.radiusS
+                    color: T.QN.alpha(kroot.accent, 0.14)
+                    Kirigami.Icon {
+                        anchors.centerIn: parent
+                        width: Kirigami.Units.iconSizes.small
+                        height: width
+                        source: boardEditorDialog.editing ? "edit-rename" : "list-add"
+                        color: kroot.accent
+                    }
+                }
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 0
+                    Kirigami.Heading {
+                        level: 4
+                        text: boardEditorDialog.editing ? i18n("Rename board") : i18n("New project board")
+                        color: T.QN.text
+                    }
+                    PlasmaComponents.Label {
+                        text: boardEditorDialog.editing
+                              ? i18n("Give this project a clear name.")
+                              : i18n("Cards and columns stay separate per project.")
+                        color: T.QN.textDim
+                        font: Kirigami.Theme.smallFont
+                    }
+                }
+                QQC2.ToolButton {
+                    icon.name: "window-close"
+                    flat: true
+                    onClicked: boardEditorDialog.reject()
+                }
+            }
+
+            QQC2.TextField {
+                id: boardNameField
+                Layout.fillWidth: true
+                placeholderText: i18n("Project name")
+                selectByMouse: true
+                onAccepted: if (text.trim()) boardEditorDialog.accept()
+                background: Rectangle {
+                    radius: T.QN.radiusS
+                    color: T.QN.inputBg
+                    border.width: 1
+                    border.color: boardNameField.activeFocus ? T.QN.alpha(kroot.accent, 0.65) : T.QN.borderHi
+                }
+                color: T.QN.text
+                placeholderTextColor: T.QN.textFaint
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                Item { Layout.fillWidth: true }
+                QQC2.Button { text: i18n("Cancel"); flat: true; onClicked: boardEditorDialog.reject() }
+                QQC2.Button {
+                    text: boardEditorDialog.editing ? i18n("Save") : i18n("Create board")
+                    icon.name: boardEditorDialog.editing ? "document-save" : "list-add"
+                    highlighted: true
+                    enabled: boardNameField.text.trim() !== ""
+                    onClicked: boardEditorDialog.accept()
+                }
+            }
+        }
+    }
+
+    QQC2.Dialog {
+        id: deleteBoardDialog
+        property string boardId: ""
+        property string boardTitle: ""
+        property int boardCardCount: 0
+
+        function showFor(id, title, count) {
+            boardId = id;
+            boardTitle = title;
+            boardCardCount = count;
+            open();
+        }
+
+        modal: true
+        dim: true
+        anchors.centerIn: parent
+        width: Math.min(kroot.width - Kirigami.Units.gridUnit * 2, Kirigami.Units.gridUnit * 20)
+        padding: Kirigami.Units.largeSpacing
+        closePolicy: QQC2.Popup.CloseOnEscape
+        onAccepted: if (boardId) kroot.controller.deleteItem("boards", boardId)
+        background: Rectangle {
+            radius: T.QN.radiusL
+            color: T.QN.surface
+            border.width: 1
+            border.color: T.QN.alpha(Theme.PALETTE.rose, 0.45)
+        }
+        contentItem: ColumnLayout {
+            spacing: Kirigami.Units.largeSpacing
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Kirigami.Units.smallSpacing
+                Rectangle {
+                    Layout.preferredWidth: Kirigami.Units.gridUnit * 2
+                    Layout.preferredHeight: width
+                    radius: T.QN.radiusS
+                    color: T.QN.alpha(Theme.PALETTE.rose, 0.14)
+                    Kirigami.Icon {
+                        anchors.centerIn: parent
+                        width: Kirigami.Units.iconSizes.small
+                        height: width
+                        source: "user-trash"
+                        color: Theme.PALETTE.rose
+                    }
+                }
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 0
+                    Kirigami.Heading { level: 4; text: i18n("Move board to Trash?"); color: T.QN.text }
+                    PlasmaComponents.Label {
+                        Layout.fillWidth: true
+                        wrapMode: Text.Wrap
+                        text: i18n("%1 has %2 cards. The board, its columns, and cards remain recoverable in Trash.",
+                                   deleteBoardDialog.boardTitle, deleteBoardDialog.boardCardCount)
+                        color: T.QN.textDim
+                    }
+                }
+                QQC2.ToolButton { icon.name: "window-close"; flat: true; onClicked: deleteBoardDialog.reject() }
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                Item { Layout.fillWidth: true }
+                QQC2.Button { text: i18n("Cancel"); flat: true; onClicked: deleteBoardDialog.reject() }
+                QQC2.Button {
+                    text: i18n("Move to Trash")
+                    icon.name: "user-trash"
+                    onClicked: deleteBoardDialog.accept()
+                    contentItem: RowLayout {
+                        spacing: Kirigami.Units.smallSpacing
+                        Kirigami.Icon { source: "user-trash"; color: Theme.PALETTE.rose; width: Kirigami.Units.iconSizes.small; height: width }
+                        PlasmaComponents.Label { text: i18n("Move to Trash"); color: Theme.PALETTE.rose }
+                    }
+                }
+            }
+        }
+    }
 }

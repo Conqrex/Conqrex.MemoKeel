@@ -18,6 +18,8 @@ QN.NeonCard {
     property var controller
     property var cardData
     property var columns: []
+    property var boards: []
+    property string boardId: ""
     property var tagsMap: ({})
     property double nowMs: 0
     property bool use24h: true
@@ -59,6 +61,10 @@ QN.NeonCard {
         id: drag
         // small threshold so taps/edits aren't treated as drags
         dragThreshold: Kirigami.Units.gridUnit / 2
+        // Drag.active becoming false only cancels/leaves an attached drag. A
+        // real drop must be requested explicitly so the target column receives
+        // DropArea.onDropped and can persist the new column/order.
+        onActiveChanged: if (!active) card.Drag.drop()
     }
 
     states: State {
@@ -107,6 +113,19 @@ QN.NeonCard {
                                 text: modelData.title
                                 enabled: modelData.id !== card.cardData.columnId
                                 onTriggered: card.controller.moveCard(card.cardId, modelData.id, null)
+                            }
+                        }
+                    }
+                    QQC2.Menu {
+                        title: i18n("Move to board")
+                        enabled: card.boards.length > 1
+                        Repeater {
+                            model: card.boards
+                            QQC2.MenuItem {
+                                required property var modelData
+                                text: modelData.title
+                                enabled: modelData.id !== card.boardId
+                                onTriggered: card.controller.moveCardToBoard(card.cardId, modelData.id)
                             }
                         }
                     }

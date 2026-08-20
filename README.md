@@ -33,7 +33,7 @@
 | 🏠 **Dashboard** | The default tab: at-a-glance panes for recent notes, open to-dos and what's overdue or due today, each addable in place — no need to switch tabs. |
 | 📝 **Notes** | Markdown bodies (bold/italic/code/lists/links), inline `- [ ]` checklists, per-note neon colors, pin, archive, recoverable trash, Obsidian-style `[[wiki-links]]` with backlinks. |
 | ✅ **To-Do** | Status cycling (To Do → In Progress → Done), priorities, due dates, tags, quick-add. |
-| 📋 **Kanban** | Fit-to-width columns with WIP limits, positional drag & drop, card editor, per-column quick-add. |
+| 📋 **Kanban** | Separate project boards in tabs, each with fit-to-width columns, WIP limits, positional drag & drop, a card editor, and per-column quick-add. Existing cards migrate into a default board. |
 | ⏰ **Reminders** | Time-chip picker (In 1h · Tonight · Tomorrow · Custom calendar), repeats, native notifications, snooze, overdue badges. |
 | 🔎 **Search** | Global fuzzy search across everything, toggled from the header (Ctrl+F) instead of a permanent bar. |
 | 🏷️ **Tags** | Every tag as a usage-scaled cloud; click to filter, right-click to rename, recolour or delete. |

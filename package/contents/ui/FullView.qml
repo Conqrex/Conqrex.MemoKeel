@@ -137,9 +137,18 @@ Item {
 
     function openNote(id) { full.editingNoteId = id; }
     function tagName(id) { return (doc && doc.tags[id]) ? doc.tags[id].name : ""; }
-    function firstColumnId() {
-        if (!doc || doc.columns.length === 0) return "";
-        var cols = doc.columns.slice().sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
+    function activeBoardId() {
+        if (!doc || !doc.boards || doc.boards.length === 0) return "";
+        var wanted = doc.ui ? (doc.ui.activeKanbanBoardId || "") : "";
+        for (var i = 0; i < doc.boards.length; i++) if (doc.boards[i].id === wanted) return wanted;
+        var boards = doc.boards.slice().sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
+        return boards[0].id;
+    }
+    function firstColumnId(boardId) {
+        if (!doc || !boardId) return "";
+        var cols = doc.columns.filter(function (c) { return c.boardId === boardId; })
+                              .sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
+        if (cols.length === 0) return "";
         return cols[0].id;
     }
 
@@ -153,8 +162,10 @@ Item {
         case "todo":
             id = controller.addTodo({ text: p.text, priority: p.priority, dueAt: p.dueAt }); coll = "todos"; break;
         case "kanban":
-            var colId = full.firstColumnId();
-            if (!colId) colId = controller.addColumn({ title: i18n("To Do") });
+            var boardId = full.activeBoardId();
+            if (!boardId) boardId = controller.addBoard({ title: i18n("My Board") });
+            var colId = full.firstColumnId(boardId);
+            if (!colId) colId = controller.addColumn(boardId, { title: i18n("To Do") });
             id = controller.addCard(colId, { title: p.text, priority: p.priority, dueAt: p.dueAt }); coll = "cards"; break;
         case "reminders":
             // Reminders are added by ReminderAddRow, which owns its own parsing

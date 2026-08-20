@@ -3,8 +3,8 @@
 // Single source of truth for the document shape. Item factories stamp ids,
 // timestamps and an initial rev; defaultDoc() mirrors store.sh's default_doc().
 
-var CURRENT_SCHEMA_VERSION = 1;
-var APP_VERSION = "0.1.0";
+var CURRENT_SCHEMA_VERSION = 2;
+var APP_VERSION = "0.2.1";
 
 // Collision-safe id: "<type>-<base36 time>-<base36 random>" (never an array index).
 function uid(type) {
@@ -23,7 +23,7 @@ function defaultDoc() {
         deviceId: "",
         generatedAt: nowIso(),
         ui: {},
-        notes: [], todos: [], columns: [], cards: [],
+        notes: [], todos: [], boards: [], columns: [], cards: [],
         reminders: [], tags: {}, links: [], attachments: {}, trash: [],
         meta: { nextSeq: 0 }
     };
@@ -57,11 +57,22 @@ function makeTodo(o) {
     };
 }
 
+function makeBoard(o) {
+    o = o || {};
+    var t = nowIso();
+    return {
+        id: o.id || uid("board"), type: "board",
+        title: o.title || "My Board", color: o.color || "",
+        order: _num(o.order, 0),
+        createdAt: o.createdAt || t, updatedAt: o.updatedAt || t, rev: o.rev || 1
+    };
+}
+
 function makeColumn(o) {
     o = o || {};
     var t = nowIso();
     return {
-        id: o.id || uid("col"), type: "column",
+        id: o.id || uid("col"), type: "column", boardId: o.boardId || "",
         title: o.title || "New column", color: o.color || "",
         order: _num(o.order, 0), wipLimit: _num(o.wipLimit, null),
         createdAt: o.createdAt || t, updatedAt: o.updatedAt || t, rev: o.rev || 1

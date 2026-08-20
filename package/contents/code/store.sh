@@ -33,8 +33,8 @@
 #
 set -u
 
-SCHEMA_VERSION=1
-APP_VERSION="0.1.0"
+SCHEMA_VERSION=2
+APP_VERSION="0.2.1"
 
 DATA_DIR="${QN_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/conqrex/memokeel}"
 MIGRATE_FROM="${QN_MIGRATE_FROM:-}"
@@ -68,7 +68,7 @@ default_doc() {
     jq -cn --argjson sv "$SCHEMA_VERSION" --arg av "$APP_VERSION" --arg ts "$(iso_now)" '{
         schemaVersion: $sv, appVersion: $av, rev: 0, deviceId: "",
         generatedAt: $ts, ui: {},
-        notes: [], todos: [], columns: [], cards: [],
+        notes: [], todos: [], boards: [], columns: [], cards: [],
         reminders: [], tags: {}, links: [], attachments: {}, trash: [],
         meta: { nextSeq: 0 }
     }'
@@ -90,6 +90,7 @@ normalize() {
             ui:            ($d.ui // {}),
             notes:         ($d.notes // []),
             todos:         ($d.todos // []),
+            boards:        ($d.boards // []),
             columns:       ($d.columns // []),
             cards:         ($d.cards // []),
             reminders:     ($d.reminders // []),
@@ -98,7 +99,18 @@ normalize() {
             attachments:   ($d.attachments // {}),
             trash:         ($d.trash // []),
             meta:          ($d.meta // { nextSeq: 0 })
-        }'
+        }
+        | if (.columns | length) > 0 and (.boards | length) == 0 then
+            .boards = [{
+                id: "board-default", type: "board", title: "My Board",
+                color: "", order: 1, createdAt: (.generatedAt // ""),
+                updatedAt: (.generatedAt // ""), rev: 1
+            }]
+          else . end
+        | if (.boards | length) > 0 then
+            .boards[0].id as $firstBoard
+            | .columns = [.columns[] | if (.boardId // "") == "" then .boardId = $firstBoard else . end]
+          else . end'
 }
 
 # Ordered, durable migration. Returns the migrated doc on stdout; if a forward
@@ -116,9 +128,10 @@ migrate_store() {
 
     if [ "$disk_v" -lt "$SCHEMA_VERSION" ] 2>/dev/null; then
         cp -f "$STORE" "$BACKUP_DIR/premigrate-v${disk_v}-$(date -u +%Y%m%d-%H%M%S).json" 2>/dev/null
-        # apply ordered steps here as the schema evolves; v0->v1 only needs the
-        # defensive normalize + version bump.
-        normalize < "$STORE" | jq -c --argjson sv "$SCHEMA_VERSION" '.schemaVersion = $sv' > "$STORE.mig.$$" \
+        # normalize performs the v1 single-board conversion; stamp the current
+        # version only after that conversion succeeds.
+        normalize < "$STORE" | jq -c --argjson sv "$SCHEMA_VERSION" \
+            '.schemaVersion = $sv' > "$STORE.mig.$$" \
             && mv -f "$STORE.mig.$$" "$STORE"
     fi
     normalize < "$STORE"
@@ -242,8 +255,8 @@ cmd_save() {
         flock -w 10 9 || { err "store.sh: could not acquire lock"; exit 75; }
 
         local out="$STORE.$$.tmp"
-        normalize < "$tmp" | jq -c --arg ts "$(iso_now)" --arg av "$APP_VERSION" \
-            '.generatedAt = $ts | .appVersion = $av' > "$out" || { err "store.sh: write failed"; exit 1; }
+        normalize < "$tmp" | jq -c --arg ts "$(iso_now)" --arg av "$APP_VERSION" --argjson sv "$SCHEMA_VERSION" \
+            '.generatedAt = $ts | .appVersion = $av | .schemaVersion = $sv' > "$out" || { err "store.sh: write failed"; exit 1; }
         # ensure bytes hit disk before the rename (atomic same-fs replace)
         sync "$out" 2>/dev/null || sync
         mv -f "$out" "$STORE" || { err "store.sh: rename failed"; exit 1; }
@@ -429,7 +442,8 @@ cmd_import() {
         cp -f "$STORE" "$BACKUP_DIR/preimport-$(date -u +%Y%m%d-%H%M%S).json" 2>/dev/null
     fi
     # strip export-only annotations, normalize, and hand the clean doc to QML
-    jq -c 'del(.checksum, .exportedAt)' "$path" | normalize
+    jq -c 'del(.checksum, .exportedAt)' "$path" | normalize \
+        | jq -c --argjson sv "$SCHEMA_VERSION" '.schemaVersion = $sv'
 }
 
 cmd="${1:-load}"

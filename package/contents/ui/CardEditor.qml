@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls as QQC2
+import org.kde.plasma.components as PlasmaComponents
 import org.kde.kirigami as Kirigami
 import "components" as QN
 import "theme" as T
@@ -23,7 +24,19 @@ Rectangle {
         for (var i = 0; i < doc.cards.length; i++) if (doc.cards[i].id === cardId) return doc.cards[i];
         return null;
     }
-    readonly property var columns: doc ? doc.columns.slice().sort(function (a, b) { return (a.order || 0) - (b.order || 0); }) : []
+    readonly property string boardId: {
+        if (!doc || !cardData) return "";
+        for (var i = 0; i < doc.columns.length; i++)
+            if (doc.columns[i].id === cardData.columnId) return doc.columns[i].boardId || "";
+        return "";
+    }
+    readonly property var boards: doc ? doc.boards.slice().sort(function (a, b) { return (a.order || 0) - (b.order || 0); }) : []
+    readonly property int boardIndex: {
+        for (var i = 0; i < boards.length; i++) if (boards[i].id === boardId) return i;
+        return -1;
+    }
+    readonly property var columns: doc ? doc.columns.filter(function (c) { return c.boardId === ed.boardId; })
+                                                   .sort(function (a, b) { return (a.order || 0) - (b.order || 0); }) : []
     readonly property int columnIndex: {
         if (!cardData) return -1;
         for (var i = 0; i < columns.length; i++) if (columns[i].id === cardData.columnId) return i;
@@ -121,30 +134,63 @@ Rectangle {
             onTextChanged: ed.markDirty()
         }
 
-        RowLayout {
+        ColumnLayout {
             Layout.fillWidth: true
             spacing: Kirigami.Units.smallSpacing
 
-            QQC2.ComboBox {
-                id: columnCombo
-                Layout.fillWidth: true
-                model: ed.columns.map(function (c) { return c.title; })
-                onActivated: (i) => {
-                    if (ed.cardData && ed.columns[i] && ed.columns[i].id !== ed.cardData.columnId)
-                        ed.controller.moveCard(ed.cardId, ed.columns[i].id, null);
-                }
-                // currentIndex is never assigned imperatively here: activation makes the
-                // ComboBox write it itself and the model rebuild resets it to 0, so the
-                // index is (re)asserted from the card's real state after the dust settles.
-                Binding {
-                    target: columnCombo
-                    property: "currentIndex"
-                    value: ed.columnIndex
-                    delayed: true
-                    restoreMode: Binding.RestoreNone
-                }
+            PlasmaComponents.Label {
+                text: i18n("Location")
+                color: T.QN.textDim
+                font: Kirigami.Theme.smallFont
             }
 
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Kirigami.Units.smallSpacing
+
+                QQC2.ComboBox {
+                    id: boardCombo
+                    Layout.fillWidth: true
+                    model: ed.boards.map(function (b) { return b.title; })
+                    onActivated: (i) => {
+                        if (ed.cardData && ed.boards[i] && ed.boards[i].id !== ed.boardId)
+                            ed.controller.moveCardToBoard(ed.cardId, ed.boards[i].id);
+                    }
+                    Binding {
+                        target: boardCombo
+                        property: "currentIndex"
+                        value: ed.boardIndex
+                        delayed: true
+                        restoreMode: Binding.RestoreNone
+                    }
+                    QQC2.ToolTip.text: i18n("Project board")
+                    QQC2.ToolTip.visible: hovered
+                }
+
+                QQC2.ComboBox {
+                    id: columnCombo
+                    Layout.fillWidth: true
+                    model: ed.columns.map(function (c) { return c.title; })
+                    onActivated: (i) => {
+                        if (ed.cardData && ed.columns[i] && ed.columns[i].id !== ed.cardData.columnId)
+                            ed.controller.moveCard(ed.cardId, ed.columns[i].id, null);
+                    }
+                    Binding {
+                        target: columnCombo
+                        property: "currentIndex"
+                        value: ed.columnIndex
+                        delayed: true
+                        restoreMode: Binding.RestoreNone
+                    }
+                    QQC2.ToolTip.text: i18n("Column")
+                    QQC2.ToolTip.visible: hovered
+                }
+            }
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Kirigami.Units.smallSpacing
             QQC2.ComboBox {
                 id: priorityCombo
                 model: [i18n("No priority"), i18n("Low"), i18n("Medium"), i18n("High"), i18n("Urgent")]

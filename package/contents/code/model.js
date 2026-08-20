@@ -24,7 +24,7 @@ function maxOrder(arr) {
 
 // collection name for a trashed item's type
 function collectionFor(type) {
-    return { note: "notes", todo: "todos", column: "columns",
+    return { note: "notes", todo: "todos", board: "boards", column: "columns",
              card: "cards", reminder: "reminders" }[type] || (type + "s");
 }
 
@@ -69,6 +69,23 @@ function softDelete(doc, collection, id, retentionDays) {
     var purge = new Date(Date.now() + (retentionDays || 14) * 86400000).toISOString();
     var item = d[collection].splice(i, 1)[0];
     d.trash.unshift({ collection: collection, item: item, deletedAt: nowIso(), purgeAfter: purge });
+    // deleting a board trashes its columns and cards too
+    if (collection === "boards") {
+        var boardColumnIds = {};
+        for (var bc = d.columns.length - 1; bc >= 0; bc--) {
+            if (d.columns[bc].boardId === id) {
+                var boardCol = d.columns.splice(bc, 1)[0];
+                boardColumnIds[boardCol.id] = true;
+                d.trash.unshift({ collection: "columns", item: boardCol, deletedAt: nowIso(), purgeAfter: purge });
+            }
+        }
+        for (var bk = d.cards.length - 1; bk >= 0; bk--) {
+            if (boardColumnIds[d.cards[bk].columnId]) {
+                var boardCard = d.cards.splice(bk, 1)[0];
+                d.trash.unshift({ collection: "cards", item: boardCard, deletedAt: nowIso(), purgeAfter: purge });
+            }
+        }
+    }
     // deleting a column trashes its cards too
     if (collection === "columns") {
         for (var j = d.cards.length - 1; j >= 0; j--) {
@@ -288,10 +305,37 @@ function tagCounts(doc) {
 }
 
 // ------------------------------------------------------------ kanban ---------
-function addColumn(doc, fields) {
+function addBoard(doc, fields) {
     var d = clone(doc);
     fields = fields || {};
-    if (fields.order == null) fields.order = maxOrder(d.columns) + 1;
+    if (fields.order == null) fields.order = maxOrder(d.boards) + 1;
+    var board = Schema.makeBoard(fields);
+    d.boards.push(board);
+    if (!d.ui) d.ui = {};
+    d.ui.activeKanbanBoardId = board.id;
+    return { doc: bump(d), id: board.id };
+}
+function boardsSorted(doc) {
+    return (doc.boards || []).slice().sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
+}
+function columnsOf(doc, boardId) {
+    return doc.columns
+        .filter(function (c) { return c.boardId === boardId; })
+        .sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
+}
+function setActiveKanbanBoard(doc, boardId) {
+    var d = clone(doc);
+    if (!byId(d.boards || [], boardId)) return d;
+    if (!d.ui) d.ui = {};
+    if (d.ui.activeKanbanBoardId === boardId) return d;
+    d.ui.activeKanbanBoardId = boardId;
+    return bump(d);
+}
+function addColumn(doc, boardId, fields) {
+    var d = clone(doc);
+    fields = fields || {};
+    fields.boardId = boardId;
+    if (fields.order == null) fields.order = maxOrder(columnsOf(d, boardId)) + 1;
     var c = Schema.makeColumn(fields);
     d.columns.push(c);
     return { doc: bump(d), id: c.id };
@@ -336,6 +380,27 @@ function moveCardBefore(doc, cardId, toColumnId, beforeCardId) {
     card.order = order;
     touch(card);
     return bump(d);
+}
+
+// Move across project boards. A new/empty board gets one usable landing
+// column so the card can never become orphaned or invisible.
+function moveCardToBoard(doc, cardId, boardId, defaultColumnTitle) {
+    var d = clone(doc), card = byId(d.cards, cardId);
+    if (!card || !byId(d.boards || [], boardId)) return d;
+    var columns = columnsOf(d, boardId);
+    var targetColumnId = "";
+    if (columns.length > 0) {
+        targetColumnId = columns[0].id;
+    } else {
+        var column = Schema.makeColumn({
+            boardId: boardId,
+            title: defaultColumnTitle || "To Do",
+            order: 1
+        });
+        d.columns.push(column);
+        targetColumnId = column.id;
+    }
+    return moveCardBefore(d, cardId, targetColumnId, null);
 }
 
 // ---------------------------------------------------------- attachments ------
@@ -388,7 +453,7 @@ function attachmentPath(doc, dataDir, sha) {
 // newer-rev-wins union by id across collections; tags/attachments maps unioned.
 function mergeDocs(current, incoming) {
     var d = clone(current);
-    ["notes", "todos", "columns", "cards", "reminders"].forEach(function (coll) {
+    ["notes", "todos", "boards", "columns", "cards", "reminders"].forEach(function (coll) {
         var seen = {};
         d[coll].forEach(function (it) { seen[it.id] = true; });
         (incoming[coll] || []).forEach(function (it) {

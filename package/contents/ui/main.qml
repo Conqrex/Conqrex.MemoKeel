@@ -292,9 +292,12 @@ PlasmoidItem {
     function setTagColor(tagId, c) { commit(Model.setTagColor(doc, tagId, c)); }
     function deleteTag(tagId) { commit(Model.deleteTag(doc, tagId)); }
     // kanban
-    function addColumn(fields) { var r = Model.addColumn(doc, fields || {}); commit(r.doc); return r.id; }
+    function addBoard(fields) { var r = Model.addBoard(doc, fields || {}); commit(r.doc); return r.id; }
+    function setActiveKanbanBoard(id) { commit(Model.setActiveKanbanBoard(doc, id)); }
+    function addColumn(boardId, fields) { var r = Model.addColumn(doc, boardId, fields || {}); commit(r.doc); return r.id; }
     function addCard(colId, fields) { var r = Model.addCard(doc, colId, fields || {}); commit(r.doc); return r.id; }
     function moveCard(cardId, toCol, beforeId) { commit(Model.moveCardBefore(doc, cardId, toCol, beforeId)); }
+    function moveCardToBoard(cardId, boardId) { commit(Model.moveCardToBoard(doc, cardId, boardId, i18n("To Do"))); }
 
     // tag a freshly-created item from a list of tag names (quick-add helper)
     function applyTagNames(coll, itemId, names) {
